@@ -1,0 +1,6 @@
+{
+  "name": "ivpn",
+  "version-string": "1.0.0",
+  "dependencies": ["nlohmann-json", "spdlog"],
+  "builtin-baseline": "2024.07.15"
+}
