@@ -21,7 +21,7 @@ public:
     bool loaded() const {return module_ != nullptr;}
     std::unique_ptr<WintunAdapter> create_adapter(const std::wstring& name,const std::wstring& tunnel_type);
     std::unique_ptr<WintunAdapter> open_adapter(const std::wstring& name);
-    static bool delete_adapter(const std::wstring& name);
+    bool delete_adapter(const std::wstring& name);
 
 private:
     void* module_= nullptr;
@@ -47,8 +47,8 @@ struct WintunAdapter {
 
     WintunAdapter(Wintun* wintun,WintunAdapter* handle) : wintun_(wintun), handle_(handle){}
     ~WintunAdapter();
-    std::unique_ptr<WintunAdapter> start_session(size_t capacity);
-    const wchar_t name() const;
+    std::unique_ptr<WintunSession> start_session(size_t capacity);
+    const wchar_t* name() const;
 
     Wintun* wintun_ = nullptr;
     WintunAdapter* handle_ = nullptr;

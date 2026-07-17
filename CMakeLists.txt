@@ -16,6 +16,7 @@ add_executable(ivpn src/core/config.cpp
         main.cpp
         src/core/wintun.cpp
         include/core/wintun.h
+        src/core/wintun.cpp
         src/core/wintun.cpp)
 target_link_libraries(ivpn PRIVATE nlohmann_json::nlohmann_json spdlog::spdlog)
 target_include_directories(ivpn PRIVATE src)
