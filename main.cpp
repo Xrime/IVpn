@@ -2,7 +2,10 @@
 #include <spdlog/spdlog.h>
 #include "include/core/wintun.h"
 #include "include/core/config.h"
+#include "include/tor/control_port.h"
 
+using namespace ivpn::core;
+using namespace ivpn::tor;
 int main() {
     spdlog::set_level(spdlog::level::debug);
     spdlog::info("IVpn starting up...");
