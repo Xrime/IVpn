@@ -10,6 +10,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND EXISTS "${CMAKE_SOURCE_DIR}/../vcpkg/scripts/bui
 endif()
 
 find_package(nlohmann_json REQUIRED)
+find_package(maxminddb REQUIRED)
 find_package(spdlog REQUIRED)
 
 add_executable(ivpn src/core/config.cpp
@@ -19,6 +20,14 @@ add_executable(ivpn src/core/config.cpp
         src/core/wintun.cpp
         src/core/wintun.cpp
         include/tor/control_port.h
-        src/tor/control_port.cpp)
-target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog)
+        src/tor/control_port.cpp
+        include/core/geoip.h
+        src/core/geoip.cpp
+        include/core/exit_selector.h
+        src/core/exit_selector.cpp
+        include/core/circuit_builder.h
+        src/core/circuit_builder.cpp
+        include/core/tor_launcher.h
+        src/core/tor_launcher.cpp)
+target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog  maxminddb::maxminddb)
 target_include_directories(ivpn PRIVATE src)

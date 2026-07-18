@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <optional>
+
 namespace ivpn::tor {
     class controlPort {
     public:

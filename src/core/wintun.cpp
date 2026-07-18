@@ -19,17 +19,17 @@ namespace ivpn::core {
         }
         HMODULE mod = LoadLibraryW(L"wintun.dll");
         if (!mod) {
-            spdlog::error("Failed to load wintun.dill: {}", GetLastError());
+            spdlog::error("Failed to load wintun.dll: {}", GetLastError());
             return false;
         }
         module_ = mod;
-        create_adapter_fn_ = (wintunCreateAdapterFn)GetProcAddress(mod, "wintunCreateAdapter");
+        create_adapter_fn_ = (wintunCreateAdapterFn)GetProcAddress(mod, "WintunCreateAdapter");
         open_adapter_fn_ = (wintunOpenAdapterFn)GetProcAddress(mod, "WintunOpenAdapter");
-        delete_adapter_fn_ = (wintunDeleteAdapterFn)GetProcAddress(mod, "WintunDeleteAdapter");
+        delete_adapter_fn_ = (wintunDeleteAdapterFn)GetProcAddress(mod, "WintunCloseAdapter");
         start_session_fn_ = (wintunStartSessionFn)GetProcAddress(mod , "WintunStartSession");
-        end_session_fn_ = (wintunEndSessionFn)GetProcAddress(mod, "wintunEndSession");
+        end_session_fn_ = (wintunEndSessionFn)GetProcAddress(mod, "WintunEndSession");
         received_packet_fn_ = (wintunReceivedPacketFn)GetProcAddress(mod, "WintunReceivePacket");
-        send_packet_fn_ = (wintunSendPacketFn)GetProcAddress(mod, "WintunSendPacket");
+        send_packet_fn_ = (wintunSendPacketFn)GetProcAddress(mod, "WintunAllocateSendPacket");
 
         if (!create_adapter_fn_ || !open_adapter_fn_|| !delete_adapter_fn_ || !start_session_fn_|| !end_session_fn_||! received_packet_fn_|| !send_packet_fn_) {
             spdlog::error("Missing Wintun exports");
@@ -64,7 +64,8 @@ namespace ivpn::core {
         if (!adapter) {
             return false;
         }
-        return delete_adapter_fn_(adapter->handle_);
+        delete_adapter_fn_(adapter->handle_);
+        return  true;
     }
     WintunAdapter::~WintunAdapter() {
         if (handle_ && wintun_ && wintun_->delete_adapter_fn_) {
