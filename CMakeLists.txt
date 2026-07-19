@@ -28,6 +28,8 @@ add_executable(ivpn src/core/config.cpp
         include/core/circuit_builder.h
         src/core/circuit_builder.cpp
         include/core/tor_launcher.h
-        src/core/tor_launcher.cpp)
+        src/core/tor_launcher.cpp
+        include/core/socks5.h
+        src/core/socks5.cpp)
 target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog  maxminddb::maxminddb)
 target_include_directories(ivpn PRIVATE src)
