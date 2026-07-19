@@ -70,7 +70,7 @@ std::optional<std::pmr::vector<uint8_t> > socks5Client::receive_packet(uint32_t 
     char buf[4096];
     int n = recv(sock_, buf, sizeof(buf),0);
     if (n <=0) return {};
-    return std::vector<uint8_t>(buf, buf + n);
+    return std::pmr::vector<uint8_t>(buf, buf + n);
 
 }
 void socks5Client::close() {
@@ -80,8 +80,3 @@ void socks5Client::close() {
         WSACleanup();
     }
 }
-
-
-
-
-
