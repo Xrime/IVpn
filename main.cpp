@@ -1,5 +1,7 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
+
+#include "include/core/bootstrap_waiter.h"
 #include "include/core/wintun.h"
 #include "include/core/config.h"
 #include "include/tor/control_port.h"
@@ -26,6 +28,11 @@ int main() {
     controlPort tor("127.0.0.1", cfg->control_port);
     if (!tor.connect()) {
         spdlog::error("Tor control port not responding");
+        return 1;
+    }
+    bootstrapWaiter waiter(tor);
+    if (!waiter.wait()) {
+        spdlog::error("Tor bootstrap failed");
         return 1;
     }
     if (!tor.authenticate()) {

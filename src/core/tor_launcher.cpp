@@ -24,7 +24,7 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
     process_handle_ = new  PROCESS_INFORMATION(pi);
     spdlog::info("Tor starter (PID {})", pi.dwProcessId);
 
-    return false;
+    return true;
 
 }
 bool torLauncher::stop() {

@@ -32,6 +32,10 @@ add_executable(ivpn src/core/config.cpp
         include/core/socks5.h
         src/core/socks5.cpp
         include/core/packet_processor.h
-        src/core/packet_processor.cpp)
+        src/core/packet_processor.cpp
+        include/core/bootstrap_waiter.h
+        src/core/bootstrap_waiter.cpp
+        include/core/route_manager.h
+        src/core/route_manager.cpp)
 target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog  maxminddb::maxminddb)
 target_include_directories(ivpn PRIVATE src)
