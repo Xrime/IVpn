@@ -48,6 +48,26 @@ namespace ivpn::core {
                 stream.connected = stream.socks.connect(dst_ip, dst_port);
                 spdlog::info("TCP {}:{} -> {}:{}", src_ip,src_port,dst_ip,dst_port);
             }
+            uint8_t tcp_offset = 20;
+            uint8_t tcp_flags = packet[33];
+            bool syn = tcp_flags & 0x02;
+            bool ack = tcp_flags & 0x10;
+
+            if (syn && !ack) {
+                spdlog::info("TCP SYN {}:{} ->{}:{}", src_ip, src_port, dst_ip,dst_port );
+
+            }
+            size_t ip_header_len = (packet[0] & 0x0F)* 4;
+            size_t tcp_header_len = ((packet[32] >> 4) & 0x0F) * 4;
+            size_t total_len = (packet[2] << 8) | packet[3];
+            size_t payload_len = total_len -ip_header_len - tcp_header_len;
+
+            if (payload_len > 0) {
+                auto payload = packet.subspan(ip_header_len + tcp_header_len , payload_len);
+                if (stream.socks.send_packet(payload)) {
+                    spdlog::debug("Forwarded {} bytes TCP ", payload_len);
+                }
+            }
         }else if (protocol ==17) {//udp
             spdlog::debug("UDP packet (dropping)");
         }
