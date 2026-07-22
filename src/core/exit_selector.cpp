@@ -10,6 +10,31 @@
 ivpn::core::exitSelector::exitSelector(GeoIP &geoip, controlPort &tor) : geoip_(geoip), tor_(tor) {
 
 }
+std::vector<std::string> ivpn::core::exitSelector::get_available_cities() {
+    auto response = tor_.send("GETINFO ns/all");
+    if (!response) return {};
+
+    std::vector<std::string> cities;
+    std::istringstream stream(*response);
+    std::string line;
+
+    while (std::getline(stream, line)) {
+        if (line.find("router ") != 0) continue;
+
+        std::istringstream ls(line);
+        std::string token, nickname, ip;
+        ls >> token >> nickname >> ip;
+
+        auto loc = geoip_.lookup(ip);
+        if (loc && !loc->city.empty()) {
+            auto it = std::find(cities.begin(), cities.end(), loc->city);
+            if (it == cities.end()) {
+                cities.push_back(loc->city);
+            }
+        }
+    }
+    return cities;
+}
 std::vector<ivpn::core::exitNode> ivpn::core::exitSelector::get_exits_for_city(const std::string &city) {
     auto response = tor_.send("GETINFO ns/all");
     if (!response) return {};
@@ -41,6 +66,7 @@ std::vector<ivpn::core::exitNode> ivpn::core::exitSelector::get_exits_for_city(c
     std::sort(exits.begin(), exits.end(), [](const exitNode& a, const exitNode& b) {
        return a.bandwidth > b.bandwidth;
     });
+
     return exits;
 }
 

@@ -39,7 +39,9 @@ add_executable(ivpn src/core/config.cpp
         src/core/route_manager.cpp
         include/core/service.h
         src/core/service.cpp
-        include/core/killswitch.h
-        src/core/killswitch.cpp)
+        include/UI/tui.h
+        src/UI/tui.cpp)
+#        include/core/killswitch.h
+#        src/core/killswitch.cpp)
 target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog  maxminddb::maxminddb iphlpapi fwpuclnt.lib)
 target_include_directories(ivpn PRIVATE src)

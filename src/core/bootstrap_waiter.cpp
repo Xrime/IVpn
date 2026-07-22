@@ -22,12 +22,16 @@ namespace ivpn::core {
     }
     bool bootstrapWaiter::is_bootstrap_complete() const {
         auto response = tor_.send("GETINFO status/bootstrap-phase");
-        if (!response) return false;
+        if (!response) {
+            spdlog::debug("No resp");
+            return false;
+        }
+        spdlog::debug("Tor responce : {}" , *response);
 
         auto pos =response->find("PROGRESS=");
         if (pos == std::string::npos) return false;
         int progress = 0;
-        scanf(response->substr(pos + 9).c_str(), "%d", &progress);
+        sscanf(response->substr(pos + 9).c_str(), "%d", &progress);
         return progress >= 100;
     }
 

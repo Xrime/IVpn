@@ -11,7 +11,7 @@
 namespace ivpn::tor {
     class controlPort {
     public:
-        controlPort(const std::string& host = "127.0.0.1", uint16_t port = 9051);
+        controlPort(const std::string& host = "127.0.0.1", uint16_t port = 9051,const std::string &data_dir ="", const std::string &password ="");
         ~controlPort();
 
         bool connect();
@@ -23,6 +23,8 @@ namespace ivpn::tor {
         std::string host_;
         uint16_t port_;
         int sock_ = -1;
+        std::string data_;
+        std::string password_;
 
 
     };
