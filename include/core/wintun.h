@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <memory>
+#include <cstring>
 
 namespace ivpn::core {
     struct WintunAdapter;
@@ -61,6 +62,13 @@ namespace ivpn::core {
 
         std::span<uint8_t> receive_packet(uint32_t timeout_ms, size_t* out_size);
         std::span<uint8_t> allocate_sd_packet(size_t size);
+        void send_packet(std::span<const uint8_t> packet) {
+            auto buf = allocate_sd_packet(packet.size());
+            if (!buf.empty()) {
+                std::memcpy(buf.data(), packet.data(), packet.size());
+                complete_send(packet.size());
+            }
+        }
         void complete_send (size_t size);
 
         WintunAdapter* adapter_ = nullptr;

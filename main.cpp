@@ -37,25 +37,40 @@ int main() {
         return 1;
     }
     bootstrapWaiter waiter(tor);
-    if (!waiter.wait()) {
+    if (!waiter.wait(std::chrono::seconds(120))) {
         spdlog::error("Tor bootstrap failed");
         return 1;
     }
 
-    spdlog::info(" city: {}, Hops: {}", cfg->default_city, cfg->default_hops);
+    spdlog::info(" city: {}, Hops: {}", cfg->default_country, cfg->default_hops);
     GeoIP geoip(cfg->geoip_db);
     exitSelector selector(geoip, tor);
-    auto exits = selector.get_exits_for_city(cfg->default_city);
+    auto countries = selector.get_available_countries();
+    spdlog::info("Found {} countries: ", countries.size());
+    for (const auto& c : countries) {
+        spdlog::info(" - {}", c);
+    }
+    auto exits = selector.get_exits_for_country(cfg->default_country);
     if (exits.empty()) {
-        spdlog::error("No exits found in {}", cfg->default_city);
+        spdlog::error("No exits found in {}", cfg->default_country);
         return 1;
     }
+
+    // Use real exit fingerprints from Tor
+    std::string exit_fingerprint = exits[0].fingerprint;
+    spdlog::info("Using exit: {} ({})", exits[0].ip, exit_fingerprint.substr(0, 16) + "...");
+
     circuitBuilder builder(tor);
     std::vector<std::string> path;
-    if (cfg->default_hops ==2) {
-        path = {"$guard_fingerprint", exits[0].fingerprint};
-    }else {
-        path = {"$guard_fingerprint", "$middle_fingerprint", exits[0].fingerprint};
+    if (cfg->default_hops == 2) {
+        // 2-hop: use exit directly (Tor will pick guard)
+        path = {exit_fingerprint};
+    } else {
+        // 3-hop: need real guard and middle fingerprints
+        // For now, use EXIT guard to let Tor pick appropriate nodes
+        std::string guard_fp = exits.size() > 1 ? exits[1].fingerprint : exit_fingerprint;
+        std::string middle_fp = exits.size() > 2 ? exits[2].fingerprint : exits[0].fingerprint;
+        path = {guard_fp, middle_fp, exit_fingerprint};
     }
     builder.buildCircuit(0, path);
 
@@ -63,29 +78,32 @@ int main() {
     wintun.load();
     auto adapter = wintun.create_adapter(L"IVpn", L"IVpn");
     auto session = adapter->start_session(0x400000);
-    socks5Client socks("127.0.0.1", cfg->socks_port);
-    packetProcessor processor(*session, socks);
+    packetProcessor processor(*session, "127.0.0.1", cfg->socks_port);
 
     ivpn::UI::tui ui;
     bool connected = false;
     while (true) {
-        auto option = ui.show_menu(cfg->default_city, cfg->default_hops);
+        auto option = ui.show_menu(cfg->default_country, cfg->default_hops);
         switch (option) {
         case ivpn::UI::tui::menu_option::connect:
             processor.start();
-            connected =true;
-            ui.show_message("Connected to "+ cfg->default_city);
+            connected = true;
+            ui.show_message("Connected to " + cfg->default_country);
             break;
         case ivpn::UI::tui::menu_option::disconnect:
                 processor.stop();
-                connected =false;
-                ui.show_message("Discooected");
+                connected = false;
+                ui.show_message("Disconnected");
                 break;
         case ivpn::UI::tui::menu_option::change_city: {
             GeoIP geoip(cfg->geoip_db);
             exitSelector selector(geoip, tor);
-            auto exits = selector.get_available_cities();
-            ui.show_message("Available cities: " + exits[0]);
+            auto countries = selector.get_available_countries();
+            std::string msg = "Available countries (" + std::to_string(countries.size()) + "):\n";
+            for (size_t i = 0; i < std::min(countries.size(), size_t(10)); i++) {
+                msg += "  - " + countries[i] + "\n";
+            }
+            ui.show_message(msg);
             break;
         }
 

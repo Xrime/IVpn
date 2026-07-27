@@ -25,8 +25,8 @@ namespace ivpn::core {
     class exitSelector {
     public:
         exitSelector(class GeoIP& geoip, class controlPort& tor);
-        std::vector<exitNode> get_exits_for_city(const std::string& city);
-        std::vector<std::string> get_available_cities();
+        std::vector<exitNode> get_exits_for_country(const std::string& country);
+        std::vector<std::string> get_available_countries();
     private:
         GeoIP& geoip_;
         controlPort& tor_;

@@ -15,9 +15,9 @@ namespace ivpn::core {
         uint16_t socks_port = 9050;
         uint16_t control_port = 9051;
         uint16_t dns_port = 9053;
-        std::string default_city = "New York";
+        std::string default_country = "DE";
         int default_hops = 3;
-        std::string geoip_db = "./geoip/GeoLite2-City.memb";
+        std::string geoip_db = "./geoip/GeoLite2-City.mmdb";
 
     };
     std::optional<config> load_config(const std::string& path);

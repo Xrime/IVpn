@@ -62,21 +62,21 @@ namespace  ivpn::tor {
     std::optional<std::string> controlPort::send(const std::string &cmd) {
         if (sock_ < 0) return {};
         std::string msg = cmd + "\r\n";
-        int sent = ::send(sock_, msg.data(),(int)msg.size(), 0);
-        if (sent <= 0) return {};
+        ::send(sock_, msg.data(), (int)msg.size(), 0);
+
         std::string response;
         char buf[4096];
+
         while (true) {
-            int n = recv(sock_, buf , sizeof(buf) -1,0);
-            if (n <= 0 ) return {};
+            int n = recv(sock_, buf, sizeof(buf) - 1, 0);
+            if (n <= 0) return {};
             buf[n] = '\0';
             response += buf;
-            if (response.find("\r\n.\r\n") != std::string::npos) break;
-            if (response.back() == '\n') break;
+            if (response.find("250 OK") != std::string::npos) break;
+            if (response.find("\n.\n") != std::string::npos || response.find("\r\n.\r\n") != std::string::npos) break;
         }
 
-        return std::string(response);
-
+        return response;
     }
 
 

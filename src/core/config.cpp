@@ -1,10 +1,9 @@
-
 //
 // Created by xint2 on 15/07/2026.
 //
 #include "../../include/core/config.h"
 #include <fstream>
-#include  <spdlog//spdlog.h>
+#include <spdlog/spdlog.h>
 
 namespace ivpn::core {
     std::optional<config> load_config(const std::string &path) {
@@ -22,7 +21,7 @@ namespace ivpn::core {
             cfg.socks_port = j.value("socks_port", cfg.socks_port);
             cfg.control_port = j.value("control_port", cfg.control_port);
             cfg.dns_port = j.value("dns_port", cfg.dns_port);
-            cfg.default_city = j.value("default_city", cfg.default_city);
+            cfg.default_country = j.value("default_country", cfg.default_country);
             cfg.default_hops = j.value("default_hops", cfg.default_hops);
             cfg.geoip_db = j.value("geoip_db", cfg.geoip_db);
             spdlog::info("loaded config from {}", path);
@@ -35,16 +34,15 @@ namespace ivpn::core {
     void save_config(const config &cfg, const std::string &path) {
         nlohmann::json j = {
             {"tor_binary", cfg.tor_binary},
-            ("data_dir", cfg.data_dir),
+            {"data_dir", cfg.data_dir},
             {"socks_port", cfg.socks_port},
             {"control_port", cfg.control_port},
-            {"dns_port",cfg.dns_port},
-            {"default_city", cfg.default_city},
+            {"dns_port", cfg.dns_port},
+            {"default_country", cfg.default_country},
             {"default_hops", cfg.default_hops},
-            ("geoip_db", cfg.geoip_db)
+            {"geoip_db", cfg.geoip_db}
         };
         std::ofstream file(path);
         file << j.dump(4);
     }
 }
-

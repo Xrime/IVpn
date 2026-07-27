@@ -6,67 +6,111 @@
 #include "../../include/core/geoip.h"
 #include <spdlog/spdlog.h>
 #include <sstream>
+#include <vector>
+#include <algorithm>
 
-ivpn::core::exitSelector::exitSelector(GeoIP &geoip, controlPort &tor) : geoip_(geoip), tor_(tor) {
+using namespace ivpn::core;
 
+exitSelector::exitSelector(GeoIP &geoip, controlPort &tor) : geoip_(geoip), tor_(tor) {
 }
-std::vector<std::string> ivpn::core::exitSelector::get_available_cities() {
+
+std::vector<std::string> exitSelector::get_available_countries() {
     auto response = tor_.send("GETINFO ns/all");
     if (!response) return {};
 
-    std::vector<std::string> cities;
+    std::vector<std::string> countries;
     std::istringstream stream(*response);
     std::string line;
 
     while (std::getline(stream, line)) {
-        if (line.find("router ") != 0) continue;
-
+        if (line.find("r ") != 0) continue;
         std::istringstream ls(line);
-        std::string token, nickname, ip;
-        ls >> token >> nickname >> ip;
+        std::vector<std::string> tokens;
+        std::string token;
+        while (ls >> token) tokens.push_back(token);
+
+        if (tokens.size() < 7) continue;
+
+        std::string ip = tokens[tokens.size() - 3];
+        std::string flags_line;
+        std::getline(stream, flags_line);
+
+        if (flags_line.find("s ") != 0) continue;
+        if (flags_line.find("Exit") == std::string::npos) continue;
 
         auto loc = geoip_.lookup(ip);
-        if (loc && !loc->city.empty()) {
-            auto it = std::find(cities.begin(), cities.end(), loc->city);
-            if (it == cities.end()) {
-                cities.push_back(loc->city);
-            }
+        spdlog::debug("IP {} -> country: {}", ip, loc ? loc->country : "none");
+
+        if (!loc || loc->country.empty()) continue;
+
+        auto it = std::find(countries.begin(), countries.end(), loc->country);
+        if (it == countries.end()) {
+            countries.push_back(loc->country);
         }
     }
-    return cities;
+    return countries;
 }
-std::vector<ivpn::core::exitNode> ivpn::core::exitSelector::get_exits_for_city(const std::string &city) {
+
+std::vector<exitNode> exitSelector::get_exits_for_country(const std::string &country) {
     auto response = tor_.send("GETINFO ns/all");
     if (!response) return {};
+
     std::vector<exitNode> exits;
     std::istringstream stream(*response);
     std::string line;
+
     while (std::getline(stream, line)) {
-        if (line.find("router ")!=0)continue;
+        if (line.find("r ") != 0) continue;
+
         std::istringstream ls(line);
-        std::string token, nickname, ip;
-        ls >>token >>nickname>> ip;
-        if (line.find("w Bandwidth=") == std::string::npos) continue;
+        std::vector<std::string> tokens;
+        std::string token;
+        while (ls >> token) tokens.push_back(token);
+
+        if (tokens.size() < 7) continue;
+
+        std::string identity = tokens[2];
+        std::string ip = tokens[tokens.size() - 3];
+
+        std::string flags_line;
+        if (!std::getline(stream, flags_line)) continue;
+        if (flags_line.find("s ") != 0) continue;
+        if (flags_line.find("Exit") == std::string::npos) continue;
+
         auto loc = geoip_.lookup(ip);
-        if (!loc || loc->city != city) continue;
+        if (!loc) continue;
+
+        spdlog::debug("IP {} -> country: {}", ip, loc->country);
+
+        if (loc->country != country) continue;
 
         exitNode node;
         node.ip = ip;
-
         node.city = loc->city;
-        size_t pos = line.find("w Bandwidth=");
-        if (pos != std::string::npos) {
-            std::string bw = line.substr(pos + 13);
-            std::istringstream bwstream(bw);
-            bwstream >> node.bandwidth;
+        node.bandwidth = 1000;
+        node.fingerprint = identity;
 
+        std::string data_line;
+        while (std::getline(stream, data_line)) {
+            if (data_line == ".") break;
+
+            if (data_line.find("fingerprint ") == 0) {
+                std::string fp = data_line.substr(12);
+                fp.erase(std::remove(fp.begin(), fp.end(), ' '), fp.end());
+                if (!fp.empty() && fp[0] == '$') fp = fp.substr(1);
+                node.fingerprint = fp;
+            }
+            else if (data_line.find("w Bandwidth=") == 0) {
+                try {
+                    node.bandwidth = std::stoull(data_line.substr(12));
+                } catch (...) {}
+            }
         }
+
+        spdlog::info("US Exit found: {} -> {}", ip, node.fingerprint.substr(0, 16) + "...");
         exits.push_back(node);
     }
-    std::sort(exits.begin(), exits.end(), [](const exitNode& a, const exitNode& b) {
-       return a.bandwidth > b.bandwidth;
-    });
 
+    spdlog::info("Found {} exits for country {}", exits.size(), country);
     return exits;
 }
-
