@@ -59,6 +59,8 @@ namespace ivpn::core {
                                           uint8_t tcp_flags,
                                           std::span<const uint8_t> payload);
         uint16_t checksum(uint16_t* data, size_t len);
+        std::vector<uint8_t> buildUDPPacket(const std::string& src_ip,uint16_t src_port, const std::string& dst_ip, uint16_t dst_port, std::span<const uint8_t> payload);
+
     };
 
 }
