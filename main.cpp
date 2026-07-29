@@ -1,6 +1,6 @@
 #include <iostream>
 #include <spdlog/spdlog.h>
-
+#include <windows.h>
 #include "include/core/bootstrap_waiter.h"
 #include "include/core/wintun.h"
 #include "include/core/config.h"
@@ -12,11 +12,11 @@
 #include "include/core/tor_launcher.h"
 #include "include/core/geoip.h"
 #include "include/UI/tui.h"
-
+#include "include/core/killswitch.h"
+#include "include/core/route_manager.h"
 
 using namespace ivpn::core;
 using namespace ivpn::tor;
-int main() {
     spdlog::set_level(spdlog::level::debug);
     spdlog::info("IVpn starting up...");
     auto cfg = load_config("config.json");
