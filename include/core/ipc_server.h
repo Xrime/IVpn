@@ -14,6 +14,7 @@
 namespace ivpn::core {
     class ipcServer {
     public:
+        ipcServer(const std::string& pipe_name = "\\\\.\\pipe\\ivpn_control");
         ~ipcServer();
         void start();
         void stop();
@@ -26,6 +27,7 @@ namespace ivpn::core {
         std::atomic<bool> running_{false};
         std::thread server_thread_;
         std::function<void()> on_connect_;
+        HANDLE pipe_ = INVALID_HANDLE_VALUE;
         std::function<void()> on_disconnect_;
         std::function<void(const std::string&)> on_change_city_;
         void listen_loop();
