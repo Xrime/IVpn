@@ -29,14 +29,23 @@ namespace ivpn::core {
             return h1 ^ (h2 << 1) ^ (k.local_port << 2) ^ (k.remote_port << 3);
         }
     };
+    enum class tcpState {
+        Listen,
+        SynReceived,
+        Established,
+        Closed
+    };
+
     struct tcpStream {
         tcpStream() = default;
         tcpStream(const tcpStream&)= delete;
         tcpStream& operator = (const tcpStream&) = delete;
         std::unique_ptr<socks5Client> socks;
         bool connected = false;
+        tcpState state = tcpState::Listen;
+        uint32_t client_seq = 0;
+        uint32_t vpn_seq = 0;
     };
-
     class packetProcessor {
     public:
         packetProcessor(WintunSession& session, const std::string& socks_host, uint16_t socks_port);
@@ -57,9 +66,12 @@ namespace ivpn::core {
         std::thread recvThread_;
         std::vector<uint8_t> buildTCPPacket(const tcpStreamKey& key,
                                           uint8_t tcp_flags,
+                                          uint32_t seq,
+                                          uint32_t ack,
                                           std::span<const uint8_t> payload);
         uint16_t checksum(uint16_t* data, size_t len);
         std::vector<uint8_t> buildUDPPacket(const std::string& src_ip,uint16_t src_port, const std::string& dst_ip, uint16_t dst_port, std::span<const uint8_t> payload);
+
 
     };
 
