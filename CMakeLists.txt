@@ -45,7 +45,9 @@ add_executable(ivpn src/core/config.cpp
         include/core/dns_interceptor.h
         src/core/dns_interceptor.cpp
         include/core/ipc_server.h
-        src/core/ipc_server.cpp)
+        src/core/ipc_server.cpp
+        include/core/ipc_client.h
+        src/core/ipc_client.cpp)
 #        include/core/killswitch.h
 #        src/core/killswitch.cpp)
 target_link_libraries(ivpn PRIVATE ws2_32 nlohmann_json::nlohmann_json spdlog::spdlog  maxminddb::maxminddb iphlpapi fwpuclnt.lib)
