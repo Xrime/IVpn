@@ -20,7 +20,7 @@ namespace ivpn::UI {
         };
         tui() = default;
         void set_cities(const std::vector<std::string>& cities);
-        menu_option show_menu(const std::string& current_city, int hops);
+        menu_option show_menu(const std::string& current_city, int hops, bool is_connected);
         void show_message(const std::string& msg);
 
     private:

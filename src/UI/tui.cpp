@@ -9,7 +9,7 @@ namespace ivpn::UI {
     void tui::set_cities(const std::vector<std::string> &cities) {
         cities_ = cities;
     }
-    tui::menu_option tui::show_menu(const std::string &current_city, int hops) {
+    tui::menu_option tui::show_menu(const std::string &current_city, int hops, bool is_connected) {
         while (true) {
             system("cls");
             std::cout << "=== IVpn Terminal Menu ===\n";

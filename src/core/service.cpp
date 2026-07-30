@@ -24,7 +24,7 @@
 using  namespace ivpn::core;
 using namespace ivpn::tor;
 
-#define SERVICE_NAME TEXT("IVpnDeamon")
+#define SERVICE_NAME TEXT("IVpnDaemon")
 
 SERVICE_STATUS gServiceStatus = {0};
 SERVICE_STATUS_HANDLE gStatusHandle = NULL;
@@ -32,7 +32,7 @@ HANDLE gServiceStopEvent = INVALID_HANDLE_VALUE;
 
 VOID WINAPI ServiceMain(DWORD argc, LPTSTR* argv);
 VOID WINAPI ServiceCtrlHandler(DWORD ctrlcode);
-VOID WINAPI ServiceWorkerThread(LPVOID lpParam);
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
 
 bool assign_adapter_ip(const std::string& adapter_name, const std::string& ip) {
     spdlog::info("Assigning IP {} to adapter {}", ip, adapter_name);
@@ -57,32 +57,21 @@ VOID WINAPI ServiceMain(DWORD argc, LPTSTR* argv) {
     if (!gStatusHandle) {
         return;
     }
+
     gServiceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
     gServiceStatus.dwCurrentState = SERVICE_RUNNING;
     gServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
     SetServiceStatus(gStatusHandle, &gServiceStatus);
-    gServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    WaitForSingleObject(gServiceStopEvent,INFINITE);
-    gServiceStatus.dwCurrentState = SERVICE_STOPPED;
-    SetServiceStatus(gStatusHandle, &gServiceStatus);
-    gServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (gServiceStopEvent ==NULL) {
-        gServiceStatus.dwControlsAccepted = 0;
-        gServiceStatus.dwCurrentState = SERVICE_STOPPED;
-        SetServiceStatus(gStatusHandle, &gServiceStatus);
-        return;
-    }
-    gServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
-    gServiceStatus.dwCurrentState = SERVICE_RUNNING;
-    SetServiceStatus(gStatusHandle, &gServiceStatus);
-    HANDLE hThread = CreateThread(NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
-    WaitForSingleObject(hThread, INFINITE);
 
+    gServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
+    WaitForSingleObject(gServiceStopEvent, INFINITE);
+    WaitForSingleObject(hThread, INFINITE);
     CloseHandle(gServiceStopEvent);
+    CloseHandle(hThread);
     gServiceStatus.dwControlsAccepted = 0;
     gServiceStatus.dwCurrentState = SERVICE_STOPPED;
     SetServiceStatus(gStatusHandle, &gServiceStatus);
-
 }
 
 VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode) {
@@ -100,7 +89,70 @@ VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode) {
             break;
     }
 }
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
+    spdlog::info("IVpn starting up as System");
+    auto cfg =load_config("C:\\Program Files\\IVpn\\config.json");
+    if (!cfg) return 1;
 
+    torLauncher launcher(cfg->tor_binary, cfg->data_dir);
+    if (!launcher.start(cfg->socks_port,cfg->control_port, cfg->dns_port)) return 1;
+    controlPort tor("127.0.0.1", cfg->control_port, cfg->data_dir);
+    tor.connect();
+    tor.authenticate();
+    bootstrapWaiter waiter(tor);
+    waiter.wait(std::chrono::seconds(120));
+    GeoIP geoip(cfg->geoip_db);
+    exitSelector selector(geoip, tor);
+    circuitBuilder builder(tor);
+    auto exits = selector.get_exits_for_country(cfg->default_country);
+    if (!exits.empty()) builder.buildCircuit(0,{exits[0].fingerprint});
+    Wintun wintun;
+    wintun.load();
+    auto adapter = wintun.create_adapter(L"IVpn", L"IVpn");
+    assign_adapter_ip("IVpn", "10.0.0.2");
+    auto session = adapter->start_session(0x400000);
+    packetProcessor processor(*session, "127.0.0.1", cfg->socks_port);
+    killSwitch ks;
+    routeManager rm;
+    std::atomic<bool> connected{false};
+
+    ipcServer ipc;
+    ipc.setOnConnect([&]() {
+       if (!connected) {
+           spdlog::info("Received Connect command from UI.");
+           ks.enable();
+           processor.start();
+           uint32_t tun_ip = inet_addr("10.0.0.2");
+           rm.add_default_routes(tun_ip);
+           connected = true;
+       }
+    });
+
+    ipc.seOnDisconnect([&]() {
+       if (connected) {
+           spdlog::info("Received disconnect command from UI.");
+           rm.remove_default_route();
+           processor.stop();
+           ks.disable();
+           connected = false;
+       }
+    });
+    ipc.setOnChangeCity([&](const std::string& city) {
+       spdlog::info("Received ChangeCity command to: {}", city);
+    });
+    ipc.start();
+    WaitForSingleObject(gServiceStopEvent,INFINITE);
+
+    ipc.stop();
+    if (connected) {
+        rm.remove_default_route();
+        processor.stop();
+        ks.disable();
+    }
+    launcher.stop();
+    return 0;
+
+}
 
 
 
