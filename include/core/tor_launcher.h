@@ -8,16 +8,20 @@
 #include <string>
 #include <optional>
 
+#include "ipc_server.h"
+
 class  torLauncher {
 public:
     torLauncher(const std::string& tor_path, const std::string& data_dir);
     bool start(uint16_t socks_port = 9050,uint16_t control_port = 9051, uint16_t dns_port = 9053);
     bool stop();
     bool is_running() const;
+    DWORD get_pid() const{ return pid_;}
 
 private:
     std::string tor_path_;
     std::string data_dir_;
     void* process_handle_ = nullptr;
+    DWORD pid_ =0;
 };
 #endif //IVPN_TOR_LAUNCHER_H

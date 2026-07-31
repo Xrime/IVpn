@@ -126,10 +126,13 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     auto adapter = wintun.create_adapter(L"IVpn", L"IVpn");
     if (!adapter) {
         spdlog::error("Failed to create Wintun adapter");
+        launcher.stop();
         return 1;
     }
 
     assign_adapter_ip("IVpn", "10.0.0.2");
+    assign_adapter_dns("IVpn", "10.0.0.2");
+
 
     auto session = adapter->start_session(0x400000);
     if (!session) {

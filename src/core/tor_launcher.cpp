@@ -21,6 +21,9 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
         spdlog::error("Failed to start tor: {}", GetLastError());
         return false;
     }
+    pid_ = pi.dwProcessId;
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
     process_handle_ = new  PROCESS_INFORMATION(pi);
     spdlog::info("Tor starter (PID {})", pi.dwProcessId);
 

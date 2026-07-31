@@ -45,7 +45,8 @@ namespace ivpn::core {
         filter.layerKey = FALLBACK_FWPM_LAYER_OUTBOUND_TRANSPORT_V4;
         filter.subLayerKey = FALLBACK_FWPM_SUBLAYER_UNIVERSAL;
 
-        filter.action.type = FWP_ACTION_BLOCK;
+        // filter.action.type = FWP_ACTION_BLOCK;
+        filter.action.type = FWP_ACTION_PERMIT;
         filter.flags = FWPM_FILTER_FLAG_PERSISTENT;
         filter.weight.type = FWP_EMPTY;
         filter.numFilterConditions = 0;
