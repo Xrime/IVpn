@@ -9,16 +9,16 @@
 #include <nlohmann/json.hpp>
 
 namespace ivpn::core {
+    std::string get_exe_dir();
     struct config {
-        std::string tor_binary = "tor.exe";
-        std::string data_dir = "./data/tor";
+        std::string tor_binary;
+        std::string data_dir;
         uint16_t socks_port = 9050;
         uint16_t control_port = 9051;
         uint16_t dns_port = 9053;
         std::string default_country = "DE";
         int default_hops = 3;
-        std::string geoip_db = "./geoip/GeoLite2-City.mmdb";
-
+        std::string geoip_db;
     };
     std::optional<config> load_config(const std::string& path);
     void save_config(const config& cfg, const std::string& path);

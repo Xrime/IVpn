@@ -63,25 +63,22 @@ namespace  ivpn::tor {
         if (sock_ < 0) return {};
         std::string msg = cmd + "\r\n";
         ::send(sock_, msg.data(), (int)msg.size(), 0);
-
         std::string response;
         char buf[4096];
-
         while (true) {
             int n = recv(sock_, buf, sizeof(buf) - 1, 0);
             if (n <= 0) return {};
             buf[n] = '\0';
             response += buf;
-            if (response.find("250 OK") != std::string::npos) break;
-            if (response.find("\n.\n") != std::string::npos || response.find("\r\n.\r\n") != std::string::npos) break;
+            if (response.find("\r\n") != std::string::npos) {
+                if (response.find("250 ") != std::string::npos || response.find("5") == 0) {
+                    break;
+                }
+                if (response.find("\n.\n") != std::string::npos || response.find("\r\n.\r\n") != std::string::npos) {
+                    break;
+                }
+            }
         }
-
         return response;
     }
-
-
-
-
-
-
 }

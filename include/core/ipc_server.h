@@ -19,7 +19,7 @@ namespace ivpn::core {
         void start();
         void stop();
         void setOnConnect(std::function<void()> cb ){on_connect_ = cb;}
-        void seOnDisconnect(std::function<void()> cb) {on_disconnect_ = cb;}
+        void setOnDisconnect(std::function<void()> cb) {on_disconnect_ = cb;}
         void setOnChangeCity(std::function<void(const std::string&)> cb){on_change_city_= cb;}
 
     private:

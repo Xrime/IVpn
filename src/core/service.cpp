@@ -33,6 +33,12 @@ HANDLE gServiceStopEvent = INVALID_HANDLE_VALUE;
 VOID WINAPI ServiceMain(DWORD argc, LPTSTR* argv);
 VOID WINAPI ServiceCtrlHandler(DWORD ctrlcode);
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
+bool assign_adapter_dns(const std::string& adapter_name, const std::string& dns_ip) {
+    spdlog::info("Assiging DNS {} to adaptr {}",dns_ip, adapter_name );
+    std::string cmd = fmt::format("netsh interface ip sett dns name=\"{}\" static {}", adapter_name, dns_ip);
+    int result = system((cmd + " >nul 2>&1").c_str());
+    return result == 0;
+}
 
 bool assign_adapter_ip(const std::string& adapter_name, const std::string& ip) {
     spdlog::info("Assigning IP {} to adapter {}", ip, adapter_name);
@@ -42,6 +48,11 @@ bool assign_adapter_ip(const std::string& adapter_name, const std::string& ip) {
 }
 
 int main(int argc, char** argv) {
+    if (argc >1 && std::string(argv[1]) == "--console") {
+        spdlog::info("Running in console ");
+        ServiceWorkerThread(NULL);
+        return 0;
+    }
     SERVICE_TABLE_ENTRY ServiceTable[] = {
         {(LPSTR)SERVICE_NAME, (LPSERVICE_MAIN_FUNCTIONA)ServiceMain},
         {NULL, NULL}
@@ -91,7 +102,7 @@ VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode) {
 }
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     spdlog::info("IVpn starting up as System");
-    auto cfg =load_config("C:\\Program Files\\IVpn\\config.json");
+    auto cfg =load_config("config.json");
     if (!cfg) return 1;
 
     torLauncher launcher(cfg->tor_binary, cfg->data_dir);
@@ -107,10 +118,26 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     auto exits = selector.get_exits_for_country(cfg->default_country);
     if (!exits.empty()) builder.buildCircuit(0,{exits[0].fingerprint});
     Wintun wintun;
-    wintun.load();
+    if (!wintun.load()) {
+        spdlog::error("Failed to load wintun.dll!");
+        return 1;
+    }
+
     auto adapter = wintun.create_adapter(L"IVpn", L"IVpn");
+    if (!adapter) {
+        spdlog::error("Failed to create Wintun adapter");
+        return 1;
+    }
+
     assign_adapter_ip("IVpn", "10.0.0.2");
+
     auto session = adapter->start_session(0x400000);
+    if (!session) {
+        spdlog::error("Failed to start Wintun session");
+        return 1;
+    }
+
+    spdlog::info("Wintun adapter successfully created!");
     packetProcessor processor(*session, "127.0.0.1", cfg->socks_port);
     killSwitch ks;
     routeManager rm;
@@ -128,13 +155,14 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
        }
     });
 
-    ipc.seOnDisconnect([&]() {
+    ipc.setOnDisconnect([&]() {
        if (connected) {
-           spdlog::info("Received disconnect command from UI.");
+           spdlog::info("Client disconnect command from UI.");
+           connected = false;
            rm.remove_default_route();
            processor.stop();
            ks.disable();
-           connected = false;
+
        }
     });
     ipc.setOnChangeCity([&](const std::string& city) {
@@ -155,96 +183,4 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
 }
 
 
-
-// SERVICE_STATUS_HANDLE service::status_handle_ = nullptr;
-// SERVICE_STATUS service::status_ = {};
-// service::service(const std::wstring &name) : name_(name) {
-
-// }
-// bool service::install() {
-//     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CREATE_SERVICE);
-//     if (!scm) {
-//         spdlog:  :error("OpenSCManager failed: {}", GetLastError());
-//         return false;
-//     }
-//     SC_HANDLE svc = CreateServiceW(
-//         scm,(name_+ L"svc").c_str(),(name_ + L"Service").c_str(), SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START,SERVICE_ERROR_NORMAL,
-//         nullptr,nullptr,nullptr,nullptr,nullptr,nullptr
-//         );
-//     if (!svc) {
-//         bool already_exists = GetLastError() == ERROR_SERVICE_EXISTS;
-//         spdlog::error("{} service install failed", already_exists ? "Service already exists" : "Failed to create");
-//         CloseServiceHandle(scm);
-//         return false;
-//     }
-//     CloseServiceHandle(svc);
-//     CloseServiceHandle(scm);
-//     spdlog::info("Service installed");
-//     return true;
-// }
-//
-// bool service::uninstall() {
-//     SC_HANDLE scm = OpenSCManagerW(nullptr,nullptr, SC_MANAGER_CONNECT);
-//     if (!scm) return false;
-//     SC_HANDLE svc = OpenServiceW(scm, (name_ +  L"svc").c_str(), SERVICE_STOP | DELETE);
-//     if (!svc) {
-//         CloseServiceHandle(scm);
-//         return false;
-//     }
-//     SERVICE_STATUS ss;
-//     ControlService(svc, SERVICE_CONTROL_STOP, &ss);
-//     bool ok = DeleteService(svc);
-//     CloseServiceHandle(svc);
-//     CloseServiceHandle(scm);
-//     return ok;
-// }
-// bool service::start() {
-//     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
-//     if (!scm) return false;
-//
-//     SC_HANDLE svc = OpenServiceW(scm, (name_ + L"svc").c_str(), SERVICE_START);
-//     if (!svc) {
-//         CloseServiceHandle(scm);
-//         return false;
-//     }
-//     bool ok = StartServiceW(svc, 0, nullptr);
-//     CloseServiceHandle(svc);
-//     CloseServiceHandle(scm);
-//     return ok;
-// }
-// bool service::stop() {
-//     SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
-//     if (!scm) return false;
-//
-//     SC_HANDLE svc = OpenServiceW(scm, (name_ + L"svc").c_str(), SERVICE_STOP);
-//     if (!svc) {
-//         CloseServiceHandle(scm);
-//         return false;
-//     }
-//
-//     SERVICE_STATUS ss;
-//     bool ok = ControlService(svc, SERVICE_CONTROL_STOP, &ss);
-//     CloseServiceHandle(svc);
-//     CloseServiceHandle(scm);
-//     return ok;
-// }
-// void WINAPI service::service_main(DWORD, LPTSTR*) {
-//     status_handle_ = RegisterServiceCtrlHandlerW(L"ivpn", service_ctrl);
-//     status_.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-//     status_.dwCurrentState = SERVICE_RUNNING;
-//     status_.dwControlsAccepted = SERVICE_ACCEPT_STOP;
-//     SetServiceStatus(status_handle_, &status_);
-//     spdlog::info("IVpn service running");
-// }
-//
-// void WINAPI service::service_ctrl(DWORD ctrl) {
-//     switch (ctrl) {
-//         case SERVICE_CONTROL_STOP:
-//             status_.dwCurrentState = SERVICE_STOPPED;
-//             break;
-//     }
-//     SetServiceStatus(status_handle_, &status_);
-// }
-//
-//
 
