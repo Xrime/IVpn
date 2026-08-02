@@ -25,7 +25,7 @@ namespace ivpn::core {
             0, NULL, OPEN_EXISTING, 0,NULL
         );
         if (hPipe == INVALID_HANDLE_VALUE) {
-            spdlog::error("Failed to connect to IVpn Demon,The service isnot running");
+            spdlog::error("Failed to connect to IVpn Daemon. Error code: {}", GetLastError());
             return false;
         }
         DWORD byte_written;

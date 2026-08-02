@@ -40,6 +40,7 @@ target_link_libraries(ivpn_daemon PRIVATE
         maxminddb::maxminddb
 )
 target_include_directories(ivpn_daemon PRIVATE src include)
+target_compile_definitions(ivpn_daemon PRIVATE _WIN32_WINNT=0x0601)
 
 add_executable(ivpn_client
         main.cpp

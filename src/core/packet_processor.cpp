@@ -42,12 +42,17 @@ namespace ivpn::core {
                                                          uint32_t seq,
                                                          uint32_t ack,
                                                          std::span<const uint8_t> payload) {
-        uint8_t src_ip[4], dst_ip[4];
-        sscanf(key.remote_ip.c_str(), "%hhu.%hhu.%hhu.%hhu", &src_ip[0], &src_ip[1], &src_ip[2], &src_ip[3]);
-        sscanf(key.local_ip.c_str(), "%hhu.%hhu.%hhu.%hhu", &dst_ip[0], &dst_ip[1], &dst_ip[2], &dst_ip[3]);
+        unsigned int s[4], d[4];
+        sscanf(key.remote_ip.c_str(), "%u.%u.%u.%u", &s[0], &s[1], &s[2], &s[3]);
+        sscanf(key.local_ip.c_str(), "%u.%u.%u.%u", &d[0], &d[1], &d[2], &d[3]);
+        uint8_t src_ip[4] = { (uint8_t)s[0], (uint8_t)s[1], (uint8_t)s[2], (uint8_t)s[3] };
+        uint8_t dst_ip[4] = { (uint8_t)d[0], (uint8_t)d[1], (uint8_t)d[2], (uint8_t)d[3] };
+
+        bool is_syn = (tcp_flags & 0x02) != 0;
+        uint16_t tcp_header_len = is_syn ? 24 : 20;
+        uint16_t total_len = 20 + tcp_header_len + (uint16_t)payload.size();
 
         std::vector<uint8_t> packet;
-        uint16_t total_len = 20 + 20 + (uint16_t)payload.size();
         packet.reserve(total_len);
 
         // IP header
@@ -55,7 +60,7 @@ namespace ivpn::core {
         packet.push_back(total_len >> 8);
         packet.push_back(total_len & 0xFF);
         packet.push_back(0); packet.push_back(0);
-        packet.push_back(0); packet.push_back(0x40);
+        packet.push_back(0x40); packet.push_back(0);
         packet.push_back(64); packet.push_back(6);
         packet.push_back(0); packet.push_back(0);
         for (int i = 0; i < 4; i++) packet.push_back(src_ip[i]);
@@ -72,9 +77,16 @@ namespace ivpn::core {
         packet.push_back(key.local_port & 0xFF);
         packet.push_back(seq >> 24); packet.push_back((seq >> 16) & 0xFF); packet.push_back((seq >> 8) &0xFF); packet.push_back(seq & 0xFF);
         packet.push_back(ack >> 24); packet.push_back((ack >> 16) & 0xFF); packet.push_back((ack >> 8) & 0xFF); packet.push_back(ack & 0xFF);
-        packet.push_back(0x50); packet.push_back(tcp_flags);
+        uint8_t data_offset = (tcp_header_len / 4) << 4;
+        packet.push_back(data_offset); packet.push_back(tcp_flags);
         packet.push_back(0xFA); packet.push_back(0xF0);
         packet.push_back(0); packet.push_back(0);
+        packet.push_back(0); packet.push_back(0);
+        if (is_syn) {
+            packet.push_back(0x02);
+            packet.push_back(0x04);
+            packet.push_back(0x05); packet.push_back(0xB4);
+        }
 
         packet.insert(packet.end(), payload.begin(), payload.end());
         std::vector<uint8_t> pseudo;
@@ -82,12 +94,13 @@ namespace ivpn::core {
             pseudo.push_back(src_ip[i]);
         }
         for (int i = 0; i < 4; i++) {
-            pseudo.push_back(6);
+            pseudo.push_back(dst_ip[i]);
         }
-        uint16_t tcpLen = 20 + (uint16_t)payload.size();
+        pseudo.push_back(0);
+        pseudo.push_back(6);
+        uint16_t tcpLen = tcp_header_len + (uint16_t)payload.size();
         pseudo.push_back(tcpLen >> 8 );
         pseudo.push_back(tcpLen &0xFF);
-
         pseudo.insert(pseudo.end(), packet.begin() + 20,packet.end());
         if (pseudo.size()% 2 != 0) {
             pseudo.push_back(0);
@@ -100,9 +113,11 @@ namespace ivpn::core {
         return packet;
     }
     std::vector<uint8_t> packetProcessor::buildUDPPacket(const std::string &src_ip, uint16_t src_port, const std::string &dst_ip, uint16_t dst_port, std::span<const uint8_t> payload) {
-        uint8_t s_ip[4], d_ip[4];
-        scanf(src_ip.c_str(), "%hhu.%hhu.%hhu.%hhu", &s_ip[0], &s_ip[1],&s_ip[2],s_ip[3]);
-        scanf(dst_ip.c_str(), "%hhu.%hhu.%hhu.%hhu", &d_ip[0], &d_ip[1], &d_ip[2], &d_ip[3]);
+        unsigned int s[4], d[4];
+        sscanf(src_ip.c_str(), "%u.%u.%u.%u", &s[0], &s[1], &s[2], &s[3]);
+        sscanf(dst_ip.c_str(), "%u.%u.%u.%u", &d[0], &d[1], &d[2], &d[3]);
+        uint8_t s_ip[4] = { (uint8_t)s[0], (uint8_t)s[1], (uint8_t)s[2], (uint8_t)s[3] };
+        uint8_t d_ip[4] = { (uint8_t)d[0], (uint8_t)d[1], (uint8_t)d[2], (uint8_t)d[3] };
 
         std::vector<uint8_t> packet;
         uint16_t total_len = 20 + 8 + (uint16_t) payload.size();
@@ -146,6 +161,7 @@ namespace ivpn::core {
             auto packet = session_.receive_packet(1000, &size);
             if (size > 0 && !packet.empty()) {
                 handle_ipv4_packet(packet);
+                session_.complete_receive(packet);
             }
         }
     }
@@ -179,20 +195,42 @@ namespace ivpn::core {
             bool fin = tcp_flags & 0x01;
 
             if (syn && !ack) {
-                spdlog::info("TCP SYN {}:{} -> {}:{}", src_ip, src_port, dst_ip, dst_port);
-                stream->socks = std::make_unique<socks5Client>(socks_host_, socks_port_);
-                stream->connected = stream->socks->connect(dst_ip, dst_port);
-                if (!stream->connected) {
-                    stream->client_seq =seq_num + 1;
-                    stream->vpn_seq = 1000;
-                    stream->state = tcpState::SynReceived;
-                    auto syn_ack = buildTCPPacket(key, 0x12, stream->vpn_seq, stream->client_seq, {});
+                if (stream->state == tcpState::SynReceived || stream->connected) {
+                    spdlog::info("TCP SYN retransmission {}:{} -> {}:{}", src_ip, src_port, dst_ip, dst_port);
+                    auto syn_ack = buildTCPPacket(key, 0x12, stream->vpn_seq - 1, stream->client_seq, {});
                     session_.send_packet(syn_ack);
-                    stream->vpn_seq++;
+                    return;
                 }
-                else {
-                    spdlog::error("Failed to connect via SOCKS5: {}:{}", dst_ip, dst_port);
+                if (stream->connecting) {
+                    return;
                 }
+                stream->connecting = true;
+                spdlog::info("TCP SYN {}:{} -> {}:{}", src_ip, src_port, dst_ip, dst_port);
+                std::thread([this, key, dst_ip, dst_port, seq_num]() {
+                    auto socks = std::make_unique<socks5Client>(socks_host_, socks_port_);
+                    bool ok = socks->connect(dst_ip, dst_port);
+                    std::lock_guard<std::mutex> lock(streams_mutex_);
+                    auto& st = streams_[key];
+                    if (st) {
+                        st->connecting = false;
+                        if (ok) {
+                            st->socks = std::move(socks);
+                            st->connected = true;
+                            st->client_seq = seq_num + 1;
+                            st->vpn_seq = 1000;
+                            st->state = tcpState::SynReceived;
+                            auto syn_ack = buildTCPPacket(key, 0x12, st->vpn_seq, st->client_seq, {});
+                            spdlog::info("SYN-ACK built: {} bytes, src={}:{} dst={}:{} seq={} ack={}",
+                                syn_ack.size(), key.remote_ip, key.remote_port,
+                                key.local_ip, key.local_port, st->vpn_seq, st->client_seq);
+                            session_.send_packet(syn_ack);
+                            st->vpn_seq++;
+                            spdlog::info("successfully connected via SOCKS5 to {}:{}", dst_ip, dst_port);
+                        } else {
+                            spdlog::error("Failed to connect via SOCKS5: {}:{}", dst_ip, dst_port);
+                        }
+                    }
+                }).detach();
             }
             else if (ack && payload_len == 0 && stream->state == tcpState::SynReceived) {
                 stream->state = tcpState::Established;
@@ -263,12 +301,23 @@ namespace ivpn::core {
                 std::lock_guard<std::mutex> lock(streams_mutex_);
                 auto& stream = streams_[key];
                 if (stream) {
-                    auto packet = buildTCPPacket(key, 0x18, stream->vpn_seq, stream->client_seq, payload);
-                    session_.send_packet(packet);
-                    stream->vpn_seq += payload.size();
+                    const size_t MAX_SEG = 1400;
+                    size_t offset = 0;
+                    while (offset < payload.size()) {
+                        size_t chunk = std::min(MAX_SEG, payload.size() - offset);
+                        std::vector<uint8_t> seg(payload.begin() + offset, payload.begin() + offset + chunk);
+                        uint8_t flags = 0x10;
+                        if (offset + chunk >= payload.size()) {
+                            flags = 0x18;
+                        }
+                        auto packet = buildTCPPacket(key, flags, stream->vpn_seq, stream->client_seq, seg);
+                        session_.send_packet(packet);
+                        stream->vpn_seq += chunk;
+                        offset += chunk;
+                    }
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 

@@ -22,8 +22,6 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
         return false;
     }
     pid_ = pi.dwProcessId;
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
     process_handle_ = new  PROCESS_INFORMATION(pi);
     spdlog::info("Tor starter (PID {})", pi.dwProcessId);
 
@@ -31,20 +29,31 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
 
 }
 bool torLauncher::stop() {
-    if (!process_handle_) {
-        return true;
-    }
-    auto pi = static_cast<PROCESS_INFORMATION*>(process_handle_);
-    if (TerminateProcess(pi->hProcess, 0)) {
-        WaitForSingleObject(pi->hProcess, 5000);
+    // if (!process_handle_) {
+    //     return true;
+    // }
+    // auto pi = static_cast<PROCESS_INFORMATION*>(process_handle_);
+    // if (TerminateProcess(pi->hProcess, 0)) {
+    //     WaitForSingleObject(pi->hProcess, 5000);
+    //     CloseHandle(pi->hProcess);
+    //     CloseHandle(pi->hThread);
+    //     delete pi;
+    //     process_handle_ = nullptr;
+    //     spdlog::info("Tor stopped");
+    //     return true;
+    // }
+    // return false;
+    if (process_handle_) {
+        auto* pi = static_cast<PROCESS_INFORMATION*>(process_handle_);
+        TerminateProcess(pi->hProcess, 0);
         CloseHandle(pi->hProcess);
         CloseHandle(pi->hThread);
         delete pi;
         process_handle_ = nullptr;
-        spdlog::info("Tor stopped");
         return true;
     }
     return false;
+
 }
 bool torLauncher::is_running() const {
     if (!process_handle_) return false;

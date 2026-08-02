@@ -2,15 +2,29 @@
 // Created by xint2 on 20/07/2026.
 //
 #include "../../include/core/route_manager.h"
-#include <spdlog//fmt/fmt.h>
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include <vector>
-#include <iphlpapi.h>
 #include <spdlog/spdlog.h>
 #include <fmt/format.h>
 
+DWORD get_wintun_if_index() {
+    ULONG outBufLen = 15000;
+    std::vector<BYTE> buffer(outBufLen);
+    DWORD dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, (PIP_ADAPTER_ADDRESSES)buffer.data(), &outBufLen);
+    if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+        buffer.resize(outBufLen);
+        dwRetVal = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX, NULL, (PIP_ADAPTER_ADDRESSES)buffer.data(), &outBufLen);
+    }
+    if (dwRetVal == NO_ERROR) {
+        PIP_ADAPTER_ADDRESSES pCurrAddresses = (PIP_ADAPTER_ADDRESSES)buffer.data();
+        while (pCurrAddresses) {
+            if (pCurrAddresses->FriendlyName && wcscmp(pCurrAddresses->FriendlyName, L"IVpn") == 0) {
+                return pCurrAddresses->IfIndex;
+            }
+            pCurrAddresses = pCurrAddresses->Next;
+        }
+    }
+    return 0;
+}
 namespace ivpn::core {
     routeManager::~routeManager() {
         stop_monitoring();
@@ -91,53 +105,55 @@ namespace ivpn::core {
     }
 
     bool routeManager::add_route(uint32_t destination, uint32_t mask, uint32_t gateway) {
-        MIB_IPFORWARDROW row{};
-        row.dwForwardDest = destination;
-        row.dwForwardMask = mask;
-        row.dwForwardNextHop = gateway;
-        row.dwForwardIfIndex =0;
-        row.dwForwardType = MIB_IPROUTE_TYPE_INDIRECT;
-        row.dwForwardProto = MIB_IPPROTO_NETMGMT;
-        row.dwForwardAge =0;
-
-        DWORD result = CreateIpForwardEntry(&row);
-        if (result != NO_ERROR) {
-            spdlog::error("Failed to add route: {}", result);
+        in_addr dest_addr, mask_addr, gw_addr;
+        dest_addr.s_addr = destination;
+        mask_addr.s_addr = mask;
+        gw_addr.s_addr = gateway;
+        std::string dest_str = inet_ntoa(dest_addr);
+        std::string mask_str = inet_ntoa(mask_addr);
+        std::string gw_str = inet_ntoa(gw_addr);
+        DWORD ifIndex = get_wintun_if_index();
+        std::string cmd = fmt::format("route add {} mask {} {} IF {}", dest_str, mask_str, gw_str, ifIndex);
+        spdlog::info("Executing route command: {}", cmd);
+        int res = system(cmd.c_str());
+        if (res != 0) {
+            spdlog::error("Failed to add route via command (res: {})", res);
             return false;
         }
-        auto format_ip = [](unsigned long ip) {
-            return fmt::format("{}.{}.{}.{}",
-                (ip & 0xFF),
-                ((ip >> 8) & 0xFF),
-                ((ip >> 16) & 0xFF),
-                ((ip >> 24) & 0xFF));
-        };
-        spdlog::info("Added route {} via {}", format_ip(destination), format_ip(gateway));
         return true;
     }
-    bool routeManager::remove_route(uint32_t destination, uint32_t mask) {
-        MIB_IPFORWARDROW row{};
-        row.dwForwardDest = destination;
-        row.dwForwardMask = mask;
 
-        DWORD result = DeleteIpForwardEntry(&row);
-        if (result != NO_ERROR) {
-            spdlog::error("Failed to remove route: {}", result);
+    bool routeManager::remove_route(uint32_t destination, uint32_t mask, uint32_t gateway) {
+        in_addr dest_addr, mask_addr, gw_addr;
+        dest_addr.s_addr = destination;
+        mask_addr.s_addr = mask;
+        gw_addr.s_addr = gateway;
+        
+        std::string dest_str = inet_ntoa(dest_addr);
+        std::string mask_str = inet_ntoa(mask_addr);
+        std::string gw_str = inet_ntoa(gw_addr);
+        DWORD ifIndex = get_wintun_if_index();
+        
+        std::string cmd = fmt::format("route delete {} mask {} {} IF {}", dest_str, mask_str, gw_str, ifIndex);
+        spdlog::info("Executing route command: {}", cmd);
+        
+        int res = system(cmd.c_str());
+        if (res != 0) {
+            spdlog::error("Failed to remove route via command (res: {})", res);
             return false;
         }
-        spdlog::info("removed route {}", destination);
         return true;
     }
     bool routeManager::add_default_routes(uint32_t tun_gateway) {
         tun_gateway_ = tun_gateway;
-        add_route(0, 0x80000000, tun_gateway);// 0.0.0.0/1
-        add_route(0x80000000, 0x80000000, tun_gateway); //128.0.0.0/1
+        add_route(inet_addr("0.0.0.0"), inet_addr("128.0.0.0"), tun_gateway);
+        add_route(inet_addr("128.0.0.0"), inet_addr("128.0.0.0"), tun_gateway);
         spdlog::info("Added default routes via TUN gateway");
         return true;
     }
     bool routeManager::remove_default_route() {
-        remove_route(0, 0x80000000);
-        remove_route(0x80000000, 0x80000000);
+        remove_route(inet_addr("0.0.0.0"), inet_addr("128.0.0.0"), tun_gateway_);
+        remove_route(inet_addr("128.0.0.0"), inet_addr("128.0.0.0"), tun_gateway_);
         tun_gateway_ = 0 ;
         return true;
     }

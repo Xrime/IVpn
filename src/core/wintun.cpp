@@ -29,9 +29,11 @@ namespace ivpn::core {
         start_session_fn_ = (wintunStartSessionFn)GetProcAddress(mod , "WintunStartSession");
         end_session_fn_ = (wintunEndSessionFn)GetProcAddress(mod, "WintunEndSession");
         received_packet_fn_ = (wintunReceivedPacketFn)GetProcAddress(mod, "WintunReceivePacket");
-        send_packet_fn_ = (wintunSendPacketFn)GetProcAddress(mod, "WintunAllocateSendPacket");
+        release_receive_packet_fn_ = (wintunReleaseReceivePacketFn)GetProcAddress(mod, "WintunReleaseReceivePacket");
+        allocate_packet_fn_ = (wintunAllocateSendPacketFn)GetProcAddress(mod, "WintunAllocateSendPacket");
+        send_packet_fn_ = (wintunSendPacketFn)GetProcAddress(mod, "WintunSendPacket");
 
-        if (!create_adapter_fn_ || !open_adapter_fn_|| !delete_adapter_fn_ || !start_session_fn_|| !end_session_fn_||! received_packet_fn_|| !send_packet_fn_) {
+        if (!create_adapter_fn_ || !open_adapter_fn_|| !delete_adapter_fn_ || !start_session_fn_|| !end_session_fn_||! received_packet_fn_ || !release_receive_packet_fn_ || !allocate_packet_fn_ || !send_packet_fn_) {
             spdlog::error("Missing Wintun exports");
             FreeLibrary(mod);
             module_= nullptr;
@@ -83,7 +85,6 @@ namespace ivpn::core {
     }
 
     const wchar_t* WintunAdapter::name() const {
-        // WintunAdapter has a Name method in newer versions, but we'll skip for now
         return L"";
     }
 
@@ -106,22 +107,19 @@ namespace ivpn::core {
         }
         *out_size = size;
         return std::span<uint8_t>(static_cast<uint8_t*>(buf), size);
-
+    }
+    void WintunSession::complete_receive(std::span<const uint8_t> packet) {
+        if (!packet.empty() && adapter_ && adapter_->wintun_ && adapter_->wintun_->release_receive_packet_fn_) {
+            adapter_->wintun_->release_receive_packet_fn_(handle_, packet.data());
+        }
     }
     std::span<uint8_t> WintunSession::allocate_sd_packet(size_t size) {
-        if (!adapter_ || !adapter_->wintun_ || !adapter_->wintun_->send_packet_fn_) {
+        if (!adapter_ || !adapter_->wintun_ || !adapter_->wintun_->allocate_packet_fn_) {
             return {};
         }
-        void* buf = adapter_->wintun_->send_packet_fn_(handle_, size);
+        void* buf = adapter_->wintun_->allocate_packet_fn_(handle_, size);
         if (!buf) return {};
         return std::span<uint8_t>(static_cast<uint8_t*>(buf), size);
+    }
 
-    }
-    void WintunSession::complete_send(size_t size) {
-        (void)size;
-    }
 }
-
-
-
-

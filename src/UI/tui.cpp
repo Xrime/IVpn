@@ -15,9 +15,9 @@ namespace ivpn::UI {
             std::cout << "=== IVpn Terminal Menu ===\n";
             std::cout <<"Current: City=" << current_city << ", Hops= "<< hops << "\n\n";
             std::cout << "1. Connect \n";
-            std::cout <<"2. Disconnection";
-            std::cout << "3. Change City";
-            std::cout<< "4. List Avaliable Cities\n";
+            std::cout <<"2. Disconnect\n";
+            std::cout << "3. Change City\n";
+            std::cout<< "4. List Available Cities\n";
             std::cout <<"5. Exit\n";
             std::cout << "Select: ";
 
@@ -35,9 +35,9 @@ namespace ivpn::UI {
         }
     }
     void tui::show_message(const std::string &msg) {
-        std::cout << "INFO" <<msg <<"\n";
+        std::cout << "\n[INFO] " << msg << "\n";
+        std::cout << "Press Enter to continue...\n";
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        if (std::cin.gcount() == 0) std::cin.get();
     }
-
-
-
 }

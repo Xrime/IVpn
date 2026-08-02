@@ -42,6 +42,7 @@ namespace ivpn::core {
         tcpStream& operator = (const tcpStream&) = delete;
         std::unique_ptr<socks5Client> socks;
         bool connected = false;
+        bool connecting = false;
         tcpState state = tcpState::Listen;
         uint32_t client_seq = 0;
         uint32_t vpn_seq = 0;

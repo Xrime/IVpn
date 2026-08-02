@@ -43,7 +43,13 @@ namespace ivpn::core {
             close();
             return false;
         }
-        return sendConnectRequest(target_host, target_port);
+        if (!sendConnectRequest(target_host, target_port)) {
+            close();
+            return false;
+        }
+        u_long mode = 1;
+        ioctlsocket(sock_, FIONBIO, &mode);
+        return true;
     }
     bool socks5Client::handshake() {
         uint8_t greeting[] = {0x05,0x01,0x00};
@@ -60,13 +66,23 @@ namespace ivpn::core {
         req.push_back(0x05);
         req.push_back(0x01);
         req.push_back(0x00);
-        req.push_back(0x03);
-        req.push_back(host.size());
-        req.insert(req.end(), host.begin(), host.end());
+        struct in_addr addr;
+        if (inet_pton(AF_INET, host.c_str(), &addr) == 1) {
+            req.push_back(0x01);
+            uint8_t* ip = (uint8_t*)&addr;
+            req.push_back(ip[0]);
+            req.push_back(ip[1]);
+            req.push_back(ip[2]);
+            req.push_back(ip[3]);
+        } else {
+            req.push_back(0x03);
+            req.push_back((uint8_t)host.size());
+            req.insert(req.end(), host.begin(), host.end());
+        }
         req.push_back(port>>8);
         req.push_back(port & 0xFF);
 
-        if (send(sock_, (char*)req.data(), req.size(), 0) < 0) {
+        if (send(sock_, (char*)req.data(), (int)req.size(), 0) < 0) {
             return  false;
         }
         uint8_t resp[256];
@@ -81,10 +97,18 @@ namespace ivpn::core {
     }
     std::optional<std::pmr::vector<uint8_t> > socks5Client::receive_packet(uint32_t timeout) {
         char buf[4096];
-        int n = recv(sock_, buf, sizeof(buf),0);
-        if (n <=0) return {};
-        return std::pmr::vector<uint8_t>(buf, buf + n);
-
+        int n = recv(sock_, buf, sizeof(buf), 0);
+        if (n > 0) {
+            return std::pmr::vector<uint8_t>(buf, buf + n);
+        }
+        if (n == 0) {
+            return {};
+        }
+        int err = WSAGetLastError();
+        if (err == WSAEWOULDBLOCK) {
+            return {};
+        }
+        return {};
     }
     void socks5Client::close() {
         if (sock_>= 0) {

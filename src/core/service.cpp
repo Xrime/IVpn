@@ -2,7 +2,6 @@
 // Created by xint2 on 20/07/2026.
 //
 
-#include <windows.h>
 #include <memory>
 #include <thread>
 #include <atomic>
@@ -33,24 +32,56 @@ HANDLE gServiceStopEvent = INVALID_HANDLE_VALUE;
 VOID WINAPI ServiceMain(DWORD argc, LPTSTR* argv);
 VOID WINAPI ServiceCtrlHandler(DWORD ctrlcode);
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
+BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType) {
+    switch (ctrlType) {
+        case CTRL_C_EVENT:
+        case CTRL_CLOSE_EVENT:
+            spdlog::info("Ctrl+C received, shutting down gracefully...");
+            if (gServiceStopEvent != INVALID_HANDLE_VALUE) {
+                SetEvent(gServiceStopEvent);
+            }
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
 bool assign_adapter_dns(const std::string& adapter_name, const std::string& dns_ip) {
-    spdlog::info("Assiging DNS {} to adaptr {}",dns_ip, adapter_name );
-    std::string cmd = fmt::format("netsh interface ip sett dns name=\"{}\" static {}", adapter_name, dns_ip);
+    spdlog::info("Assign DNS {} to adapter {}", dns_ip, adapter_name);
+    std::string cmd = fmt::format("netsh interface ip set dns name=\"{}\" static {}", adapter_name, dns_ip);
     int result = system((cmd + " >nul 2>&1").c_str());
     return result == 0;
 }
 
 bool assign_adapter_ip(const std::string& adapter_name, const std::string& ip) {
     spdlog::info("Assigning IP {} to adapter {}", ip, adapter_name);
-    std::string cmd = fmt::format("netsh interface ip set address name= \"{}\"static {} 255.255.255.0",adapter_name, ip );
+    std::string cmd = fmt::format("netsh interface ip set address name=\"{}\" static {} 255.255.255.0", adapter_name, ip);
     int result = system((cmd + " >nul 2>&1").c_str());
-    return result ==0;
+    return result == 0;
 }
 
+bool is_admin() {
+    BOOL isAdmin = FALSE;
+    PSID adminGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+        CheckTokenMembership(NULL, adminGroup, &isAdmin);
+        FreeSid(adminGroup);
+    }
+    return isAdmin == TRUE;
+}
 int main(int argc, char** argv) {
     if (argc >1 && std::string(argv[1]) == "--console") {
+        if (!is_admin()) {
+            spdlog::critical("FATAL: ivpn_daemon must be run as Administrator!");
+            return 1;
+        }
         spdlog::info("Running in console ");
+        gServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+        SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
         ServiceWorkerThread(NULL);
+        if (gServiceStopEvent != INVALID_HANDLE_VALUE) {
+            CloseHandle(gServiceStopEvent);
+        }
         return 0;
     }
     SERVICE_TABLE_ENTRY ServiceTable[] = {
@@ -151,8 +182,10 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
        if (!connected) {
            spdlog::info("Received Connect command from UI.");
            ks.enable();
+           ks.add_tor_permit_rule(cfg->tor_binary);
            processor.start();
-           uint32_t tun_ip = inet_addr("10.0.0.2");
+           uint32_t tun_ip = inet_addr("10.0.0.1");
+           rm.start_monitoring(launcher.get_pid());
            rm.add_default_routes(tun_ip);
            connected = true;
        }
@@ -161,6 +194,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     ipc.setOnDisconnect([&]() {
        if (connected) {
            spdlog::info("Client disconnect command from UI.");
+           rm.stop_monitoring();
            connected = false;
            rm.remove_default_route();
            processor.stop();

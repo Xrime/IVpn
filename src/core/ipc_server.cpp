@@ -28,16 +28,24 @@ namespace ivpn::core {
         }
     }
     void ipcServer::listen_loop(){
+        SECURITY_DESCRIPTOR sd;
+        InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION);
+        SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE);
+        SECURITY_ATTRIBUTES sa;
+        sa.nLength = sizeof(sa);
+        sa.lpSecurityDescriptor = &sd;
+        sa.bInheritHandle = FALSE;
+
         while (running_) {
             pipe_ = CreateNamedPipeA(
                 pipe_name_.c_str(),
                 PIPE_ACCESS_DUPLEX,
                 PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE| PIPE_WAIT,
                 PIPE_UNLIMITED_INSTANCES,
-                4096,4096,0,NULL);
+                4096,4096,0,&sa);
 
             if (pipe_ == INVALID_HANDLE_VALUE) {
-                spdlog::error("Failed to create IPC pipe");
+                spdlog::error("Failed to create IPC pipe. Error: {}", GetLastError());
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 continue;;
             }
