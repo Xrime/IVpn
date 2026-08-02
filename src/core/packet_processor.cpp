@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <cstring>
+#include <algorithm>
 #include "../../include/core/dns_interceptor.h"
 
 namespace ivpn::core {
@@ -184,7 +185,7 @@ namespace ivpn::core {
             std::lock_guard<std::mutex> lock(streams_mutex_);
             auto& stream = streams_[key];
             if (!stream) stream = std::make_unique<tcpStream>();
-
+            stream->last_activity = std::chrono::steady_clock::now();
 
             uint8_t tcp_flags = packet[ip_header_len + 13];
             size_t tcp_header_len = ((packet[ip_header_len + 12] >> 4) & 0x0F) * 4;
@@ -280,17 +281,48 @@ namespace ivpn::core {
             }
         }
     }
+    void packetProcessor::cleanupStateStreams() {
+        std::lock_guard<std::mutex> lock(streams_mutex_);
+        auto now = std::chrono::steady_clock::now();
+        for (auto it = streams_.begin(); it != streams_.end();) {
+            auto& stream = it->second;
+            if (!stream) {
+                it = streams_.erase(it);
+                continue;
+            }
+            bool removeStream = false;
+            auto elapsedSec = std::chrono::duration_cast<std::chrono::seconds>(now - stream->last_activity).count();
+
+            if (stream->state == tcpState::Closed) {
+                removeStream = true;
+            }
+            else if ((stream->connecting || stream->state == tcpState::SynReceived) && elapsedSec > 15) {
+                spdlog::warn("timing out incomplete TCP stream for {}:{}",it->first.remote_ip, it->first.remote_port);
+                removeStream = true;
+            }
+            if (removeStream) {
+                if (stream->socks) {
+                    stream->socks->close();
+                }
+                it = streams_.erase(it);
+            }else {
+                ++it;
+            }
+        }
+    }
 
     void packetProcessor::response_loop() {
+        auto last_cleanup_time = std::chrono::steady_clock::now();
         while (running_) {
             std::vector<std::pair<tcpStreamKey, std::vector<uint8_t>>> responses;
 
             {
                 std::lock_guard<std::mutex> lock(streams_mutex_);
                 for (auto& [key, stream] : streams_) {
-                    if (stream && stream->connected) {
+                    if (stream && stream->connected && stream->state != tcpState::Closed) {
                         auto resp = stream->socks->receive_packet(10);
                         if (resp && resp->size() > 0) {
+                            stream->last_activity = std::chrono::steady_clock::now();
                             responses.push_back({key, std::vector<uint8_t>(resp->begin(), resp->end())});
                         }
                     }
@@ -300,7 +332,7 @@ namespace ivpn::core {
             for (auto& [key, payload] : responses) {
                 std::lock_guard<std::mutex> lock(streams_mutex_);
                 auto& stream = streams_[key];
-                if (stream) {
+                if (stream && stream->state != tcpState::Closed) {
                     const size_t MAX_SEG = 1400;
                     size_t offset = 0;
                     while (offset < payload.size()) {
@@ -315,10 +347,18 @@ namespace ivpn::core {
                         stream->vpn_seq += chunk;
                         offset += chunk;
                     }
+                    stream->last_activity = std::chrono::steady_clock::now();
                 }
             }
+
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - last_cleanup_time).count() >= 2) {
+                cleanupStateStreams();
+                last_cleanup_time = now;
+            }
+
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
-} // namespace ivpn::core
+}
