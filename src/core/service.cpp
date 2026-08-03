@@ -202,8 +202,21 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
 
        }
     });
-    ipc.setOnChangeCity([&](const std::string& city) {
-       spdlog::info("Received ChangeCity command to: {}", city);
+    ipc.setOnGetCites([&]() {
+       spdlog::info("IPC client request avaliable country.");
+        return selector.get_available_countries();
+    });
+    ipc.setOnChangeCity([&](const std::string& country) {
+       spdlog::info("Received ChangeCity command to: {}", country);
+        std::string setconf_cmd =fmt::format("SETCONF exitnoded ={{{}}} strictNode=1",country);
+        auto conf_response = tor.send(setconf_cmd);
+        if (conf_response && conf_response->("250 0k") != std::string::npos) {
+            spdlog::info("successfully set Tor exitnode to {}", country);
+            tor.send("SIGNAL NEWNYM");
+            spdlog::info("sent NEWNYM signal old tor circuit is drop");
+        }else {
+            spdlog::error("Failed to set tor exitnode . response: {}", conf_response.value_or("Timeout"));
+        }
     });
     ipc.start();
     WaitForSingleObject(gServiceStopEvent,INFINITE);

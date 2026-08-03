@@ -58,13 +58,20 @@ namespace ivpn::core {
                     try {
                         auto j = nlohmann::json::parse(buffer);
                         std::string cmd = j["command"];
+                        nlohmann::json j_response;
+                        j_response["status"] = "ok";
                         if (cmd == "connect" && on_connect_) {
                             on_connect_();
                         }
                         else if (cmd == "disconnect" && on_disconnect_) {
                             on_disconnect_();
-                        }else if (cmd == "change_city" && on_change_city_) on_change_city_(j["city"]);
-                        std::string ack = R"({"status":"ok"})";
+                        }else if (cmd == "change_city" && on_change_city_) {
+                            on_change_city_(j["city"]);
+                        }
+                        else if (cmd=="get_cities" && on_get_cities_) {
+                            j_response["cities"] = on_get_cities_();
+                        }
+                        std::string ack = j_response.dump();
                         DWORD bytes_written;
                         WriteFile(pipe_, ack.c_str(),(DWORD)ack.size(), &bytes_written, NULL);
 

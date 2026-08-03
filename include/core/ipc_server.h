@@ -10,6 +10,7 @@
 #include <thread>
 #include <windows.h>
 #include <atomic>
+#include <vector>
 
 namespace ivpn::core {
     class ipcServer {
@@ -21,6 +22,7 @@ namespace ivpn::core {
         void setOnConnect(std::function<void()> cb ){on_connect_ = cb;}
         void setOnDisconnect(std::function<void()> cb) {on_disconnect_ = cb;}
         void setOnChangeCity(std::function<void(const std::string&)> cb){on_change_city_= cb;}
+        void setOnGetCites(std::function<std::vector<std::string>()> cb){on_get_cities_ = cb;}
 
     private:
         std::string pipe_name_;
@@ -31,6 +33,8 @@ namespace ivpn::core {
         std::function<void()> on_disconnect_;
         std::function<void(const std::string&)> on_change_city_;
         void listen_loop();
+        std::function<std::vector<std::string>()> on_get_cities_;
+
     };
 }
 #endif //IVPN_IPC_SERVER_H

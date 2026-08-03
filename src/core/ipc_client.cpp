@@ -41,6 +41,36 @@ namespace ivpn::core {
         CloseHandle(hPipe);
         return true;
     }
+    std::vector<std::string> ipcClient::get_cities() {
+        nlohmann::json j;
+        j["command"] = "get_cities";
+        std::string payload = j.dump();
 
-
-}
+        HANDLE hPipe = CreateFileA(pipe_name_.c_str(), GENERIC_READ| GENERIC_EXECUTE, 0, NULL, OPEN_EXISTING, 0, NULL);
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            spdlog::error("failed to connect to IVpn Deamon. error code : {} ",GetLastError());
+            return {};
+        }
+        DWORD byte_written;
+        if (!WriteFile(hPipe, payload.c_str(), (DWORD)payload.size(), &byte_written, NULL)) {
+            CloseHandle(hPipe);
+            return {};
+        }
+        char buffer[4096];
+        DWORD bytes_read;
+        std::vector<std::string> cities;
+        if (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytes_read, NULL)) {
+            buffer[bytes_read] = '\0';
+            try {
+                auto response = nlohmann::json::parse(buffer);
+                if (response.contains("cities")) {
+                    cities = response["cities"].get<std::vector<std::string>>();
+                }
+            }catch (const std::exception& e) {
+                    spdlog::error("Failed to parse city list: {}",e.what());
+                }
+            }
+        CloseHandle(hPipe);
+        return cities;
+        }
+    }

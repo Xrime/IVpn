@@ -29,20 +29,6 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
 
 }
 bool torLauncher::stop() {
-    // if (!process_handle_) {
-    //     return true;
-    // }
-    // auto pi = static_cast<PROCESS_INFORMATION*>(process_handle_);
-    // if (TerminateProcess(pi->hProcess, 0)) {
-    //     WaitForSingleObject(pi->hProcess, 5000);
-    //     CloseHandle(pi->hProcess);
-    //     CloseHandle(pi->hThread);
-    //     delete pi;
-    //     process_handle_ = nullptr;
-    //     spdlog::info("Tor stopped");
-    //     return true;
-    // }
-    // return false;
     if (process_handle_) {
         auto* pi = static_cast<PROCESS_INFORMATION*>(process_handle_);
         TerminateProcess(pi->hProcess, 0);
