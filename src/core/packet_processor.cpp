@@ -300,6 +300,10 @@ namespace ivpn::core {
                 spdlog::warn("timing out incomplete TCP stream for {}:{}",it->first.remote_ip, it->first.remote_port);
                 removeStream = true;
             }
+            else if (stream->state == tcpState::Established && elapsedSec > 300) {
+                spdlog::warn("timing out idle establish stream for {}:{}",it->first.remote_ip, it->first.remote_port );
+                removeStream = true;
+            }
             if (removeStream) {
                 if (stream->socks) {
                     stream->socks->close();
@@ -320,11 +324,18 @@ namespace ivpn::core {
                 std::lock_guard<std::mutex> lock(streams_mutex_);
                 for (auto& [key, stream] : streams_) {
                     if (stream && stream->connected && stream->state != tcpState::Closed) {
-                        auto resp = stream->socks->receive_packet(10);
-                        if (resp && resp->size() > 0) {
-                            stream->last_activity = std::chrono::steady_clock::now();
-                            responses.push_back({key, std::vector<uint8_t>(resp->begin(), resp->end())});
+                        try {
+                            auto resp = stream->socks->receive_packet(10);
+                            if (resp && resp->size() > 0) {
+                                stream->last_activity = std::chrono::steady_clock::now();
+                                responses.push_back({key, std::vector<uint8_t>(resp->begin(), resp->end())});
+                            }
+                        }catch (const std::exception e) {
+                            spdlog::info("Remote server disconnected {}:{}. Sending FIN to client.", key.remote_ip, key.remote_port);
+                            auto fin_pkt = buildTCPPacket(key, 0x11, stream->vpn_seq, stream->client_seq, {});
+                            stream->state = tcpState::Closed;
                         }
+
                     }
                 }
             }

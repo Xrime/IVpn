@@ -102,13 +102,13 @@ namespace ivpn::core {
             return std::pmr::vector<uint8_t>(buf, buf + n);
         }
         if (n == 0) {
-            return {};
+            throw std::runtime_error("connection closed by remote server");
         }
         int err = WSAGetLastError();
         if (err == WSAEWOULDBLOCK) {
             return {};
         }
-        return {};
+        throw std::runtime_error("socket error");
     }
     void socks5Client::close() {
         if (sock_>= 0) {
