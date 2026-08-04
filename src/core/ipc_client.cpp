@@ -46,7 +46,7 @@ namespace ivpn::core {
         j["command"] = "get_cities";
         std::string payload = j.dump();
 
-        HANDLE hPipe = CreateFileA(pipe_name_.c_str(), GENERIC_READ| GENERIC_EXECUTE, 0, NULL, OPEN_EXISTING, 0, NULL);
+        HANDLE hPipe = CreateFileA(pipe_name_.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
         if (hPipe == INVALID_HANDLE_VALUE) {
             spdlog::error("failed to connect to IVpn Deamon. error code : {} ",GetLastError());
             return {};

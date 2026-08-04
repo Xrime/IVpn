@@ -147,7 +147,7 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     exitSelector selector(geoip, tor);
     circuitBuilder builder(tor);
     auto exits = selector.get_exits_for_country(cfg->default_country);
-    if (!exits.empty()) builder.buildCircuit(0,{exits[0].fingerprint});
+    // if (!exits.empty()) builder.buildCircuit(0,{exits[0].fingerprint});
     Wintun wintun;
     if (!wintun.load()) {
         spdlog::error("Failed to load wintun.dll!");
@@ -208,9 +208,9 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
     });
     ipc.setOnChangeCity([&](const std::string& country) {
        spdlog::info("Received ChangeCity command to: {}", country);
-        std::string setconf_cmd =fmt::format("SETCONF exitnoded ={{{}}} strictNode=1",country);
+        std::string setconf_cmd =fmt::format("SETCONF ExitNodes={{{}}} strictNode=1",country);
         auto conf_response = tor.send(setconf_cmd);
-        if (conf_response && conf_response->("250 0k") != std::string::npos) {
+        if (conf_response && conf_response->find("250 0k") != std::string::npos) {
             spdlog::info("successfully set Tor exitnode to {}", country);
             tor.send("SIGNAL NEWNYM");
             spdlog::info("sent NEWNYM signal old tor circuit is drop");

@@ -37,7 +37,7 @@ int main(){
                 }
                 break;
             case ivpn::UI::tui::menu_option::change_city: {
-                std::cout << "\n Enter target country code e.g US, DE, FR";
+                std::cout << "\n Enter target country code e.g( US, DE, FR)";
                 std::string target_country;
                 std::cin >> target_country;
                 if(ipc.send_command("change_city", target_country)) {
@@ -47,9 +47,6 @@ int main(){
                 else {
                     ui.show_message("Error ; failed to reach deamon.");
                 }
-                break;
-                // ipc.send_command("change_city", "Berlin");//i must remove this and
-                // ui.show_message("Command sent, Requesting new exit node in berlin..");
                 break;
             }
             case ivpn::UI::tui::menu_option::list_cities:{

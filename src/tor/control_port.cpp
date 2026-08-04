@@ -70,13 +70,11 @@ namespace  ivpn::tor {
             if (n <= 0) return {};
             buf[n] = '\0';
             response += buf;
-            if (response.find("\r\n") != std::string::npos) {
-                if (response.find("250 ") != std::string::npos || response.find("5") == 0) {
-                    break;
-                }
-                if (response.find("\n.\n") != std::string::npos || response.find("\r\n.\r\n") != std::string::npos) {
-                    break;
-                }
+            if (response.ends_with("250 OK\r\n")) {
+                break;
+            }
+            if (response.find("5") == 0 && response.ends_with("\r\n")) {
+                break;
             }
         }
         return response;

@@ -17,37 +17,37 @@ exitSelector::exitSelector(GeoIP &geoip, controlPort &tor) : geoip_(geoip), tor_
 std::vector<std::string> exitSelector::get_available_countries() {
     auto response = tor_.send("GETINFO ns/all");
     if (!response) return {};
-
+    spdlog::info("Fetched tor count.size: {} bytes", response->size());
     std::vector<std::string> countries;
     std::istringstream stream(*response);
     std::string line;
+    std::string current_ip;
 
     while (std::getline(stream, line)) {
-        if (line.find("r ") != 0) continue;
-        std::istringstream ls(line);
-        std::vector<std::string> tokens;
-        std::string token;
-        while (ls >> token) tokens.push_back(token);
-
-        if (tokens.size() < 7) continue;
-
-        std::string ip = tokens[tokens.size() - 3];
-        std::string flags_line;
-        std::getline(stream, flags_line);
-
-        if (flags_line.find("s ") != 0) continue;
-        if (flags_line.find("Exit") == std::string::npos) continue;
-
-        auto loc = geoip_.lookup(ip);
-        spdlog::debug("IP {} -> country: {}", ip, loc ? loc->country : "none");
-
-        if (!loc || loc->country.empty()) continue;
-
-        auto it = std::find(countries.begin(), countries.end(), loc->country);
-        if (it == countries.end()) {
-            countries.push_back(loc->country);
+        if (line.find("r ") == 0) {
+            std::istringstream ls(line);
+            std::vector<std::string> tokens;
+            std::string token;
+            while (ls >> token) tokens.push_back(token);
+            if (tokens.size() >= 7) {
+                current_ip = tokens[tokens.size() - 3];
+            }
+            else {
+                current_ip = "";
+            }
+        }
+        else if (line.find("s ")== 0 && !current_ip.empty()) {
+            if (line.find("Exit") == std::string::npos) continue;
+            auto loc = geoip_.lookup(current_ip);
+            if (!loc || loc->country.empty()) continue;
+            auto it = std::find(countries.begin(), countries.end(), loc->country);
+            if (it == countries.end()) {
+                countries.push_back(loc->country);
+            }
+            current_ip = "";
         }
     }
+    std::sort(countries.begin(), countries.end());
     return countries;
 }
 
