@@ -12,7 +12,7 @@ endif()
 find_package(nlohmann_json REQUIRED)
 find_package(maxminddb REQUIRED)
 find_package(spdlog REQUIRED)
-
+find_package(ftxui CONFIG REQUIRED)
 add_executable(ivpn_daemon
         src/core/service.cpp
         src/core/ipc_server.cpp
@@ -38,6 +38,9 @@ target_link_libraries(ivpn_daemon PRIVATE
         nlohmann_json::nlohmann_json
         spdlog::spdlog
         maxminddb::maxminddb
+        ftxui::screen
+        ftxui::dom
+        ftxui::component
 )
 target_include_directories(ivpn_daemon PRIVATE src include)
 target_compile_definitions(ivpn_daemon PRIVATE _WIN32_WINNT=0x0601)
