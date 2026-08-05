@@ -69,11 +69,75 @@ bool is_admin() {
     }
     return isAdmin == TRUE;
 }
+bool install_service() {
+    if (!is_admin()) {
+        spdlog::critical("must be admin to install");
+        return false;
+    }
+    char path[MAX_PATH];
+    GetModuleFileNameA(NULL, path, MAX_PATH);
+    SC_HANDLE scm = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (!scm) {
+        spdlog::error("failed to open Service Control Manager");
+        return  false;
+    }
+    SC_HANDLE svc = CreateServiceA(
+        scm, "IVpnDaemon", "IVpn Background Service",
+        SERVICE_ALL_ACCESS, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, path, NULL, NULL, NULL, NULL, NULL
+    );
+    if (svc) {
+        spdlog::info("Ivpn service installed");
+        CloseServiceHandle(svc);
+        CloseServiceHandle(scm);
+        return true;
+    }
+    spdlog::error("failed to install service. error code: {}", GetLastError());
+    CloseServiceHandle(scm);
+    return false;
+}
+bool uninstall_service() {
+    if (!is_admin()) {
+        spdlog::critical("Must be Administrator to unistall the service!");
+        return false;
+    }
+    SC_HANDLE scm = OpenSCManagerA(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+    if (!scm) return false;
+    SC_HANDLE svc = OpenServiceA(scm, "IVpnDaemon", SERVICE_STOP | DELETE);
+
+    if (!svc) {
+        spdlog::error("service not found");
+        CloseServiceHandle(scm);
+        return false;
+    }
+    SERVICE_STATUS status;
+    ControlService(svc, SERVICE_CONTROL_STOP, &status);
+    bool deleted = DeleteService(svc);
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+
+    if (deleted) {
+        spdlog::info("Ivpn service uninstalled successfully");
+
+    }
+    else {
+        spdlog::error("failed to uninstall service . Error code: {}",GetLastError());
+    }
+    return deleted;
+}
 int main(int argc, char** argv) {
-    if (argc >1 && std::string(argv[1]) == "--console") {
-        if (!is_admin()) {
-            spdlog::critical("FATAL: ivpn_daemon must be run as Administrator!");
-            return 1;
+    if (argc >1) {
+        std::string arg = argv[1];
+        if (arg == "--install") {
+            return install_service() ? 0: 1;
+        }
+        if (arg == "--uninstall") {
+            return uninstall_service() ? 0 :1;
+        }
+        if (arg == "--console") {
+            if (!is_admin()) {
+                spdlog::critical("FATAL: ivpn_daemon must be run as Administrator!");
+                return 1;
+            }
         }
         spdlog::info("Running in console ");
         gServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
