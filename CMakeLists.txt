@@ -55,5 +55,9 @@ add_executable(ivpn_client
 target_link_libraries(ivpn_client PRIVATE
         spdlog::spdlog
         nlohmann_json::nlohmann_json
+        ws2_32
+        ftxui::screen
+        ftxui::dom
+        ftxui::component
 )
 target_include_directories(ivpn_client PRIVATE src include)

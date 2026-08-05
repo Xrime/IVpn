@@ -39,6 +39,7 @@ namespace ivpn::UI {
         std::vector<std::string> cities_;
         std::string current_city_ = "Auto";
         bool is_connected_ =  false;
+        std::vector<std::string> tab_entries_= {"Dashboard", "Locations"};
         int tab_index_ =0;
         int city_selected_ =0;
         ftxui::Component main_container;

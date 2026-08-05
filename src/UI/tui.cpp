@@ -6,19 +6,18 @@
 using namespace ftxui;
 namespace ivpn::UI {
     tui::tui() : screen_(ftxui::ScreenInteractive::Fullscreen()) {
-        std::vector<std::string> tab_entries = {"Dashboard", "Location"};
-        auto tab_selection = Menu(&tab_entries, &tab_index_,MenuOption::HorizontalAnimated());
-        auto btn_connect = Button("  CONNECT NOW  ",[&] {
+        auto tab_selection = Menu(&tab_entries_, &tab_index_,MenuOption::HorizontalAnimated());
+        auto btn_connect = Button("  CONNECT NOW  ",[this] {
            if (on_connect) on_connect();
         });
-        auto btn_disconnecct = Button(" DISCONNECT ", [&] {
+        auto btn_disconnecct = Button(" DISCONNECT ", [this] {
            if (on_disconnect) on_disconnect();
         });
-        auto btn_quit = Button(" Quit ", [&] {
+        auto btn_quit = Button(" Quit ", [this] {
            if (on_quit) on_quit();
         });
         auto dashboard_container = Container::Horizontal({btn_connect, btn_disconnecct, btn_quit});
-        auto dashboard_renderer= Renderer(dashboard_container, [&] {
+        auto dashboard_renderer= Renderer(dashboard_container, [this, btn_connect, btn_disconnecct, btn_quit] {
            return vbox({
                text("IVpn") | bold | center,separator(),
                vbox({
@@ -30,7 +29,7 @@ namespace ivpn::UI {
            });
         });
         auto city_menu = Menu(&cities_, &city_selected_);
-        auto btn_apply_city = Button("Set Target Region", [&] {
+        auto btn_apply_city = Button("Set Target Region", [this] {
            if (!cities_.empty() && city_selected_ >= 0 && city_selected_ < cities_.size()) {
                current_city_ = cities_[city_selected_];
                if (on_change_city) on_change_city(current_city_);
@@ -41,7 +40,7 @@ namespace ivpn::UI {
             city_menu,
             btn_apply_city
         });
-        auto location_renderer = Renderer(location_container, [&] {
+        auto location_renderer = Renderer(location_container, [city_menu, btn_apply_city] {
            return vbox({
                text("Select a routing destination:") | bold, separator(), city_menu->Render() | vscroll_indicator | frame | size(HEIGHT, LESS_THAN, 15), separator(), btn_apply_city->Render() | center
            });
@@ -56,7 +55,7 @@ namespace ivpn::UI {
             tab_selection,
             tab_container
         });
-        main_container = Renderer(main_layout,[&] {
+        main_container = Renderer(main_layout,[tab_selection, tab_container] {
            return vbox({
                tab_selection->Render() | center, separator(), tab_container->Render()
            }) | border;

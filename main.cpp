@@ -1,72 +1,115 @@
 #include <spdlog/spdlog.h>
 #include <iostream>
+#include <fstream>
+#include <thread>
+#include <nlohmann/json.hpp>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib)
 #include "include/tor/control_port.h"
 #include "include/core/ipc_client.h"
 #include "include/UI/tui.h"
 
 
 using namespace ivpn::core;
-using namespace ivpn::tor;
-int main(){
-    spdlog::set_level(spdlog::level::info);
-    spdlog::info("IVpn starting up...");
-    ipcClient ipc;
-    ivpn::UI::tui ui;
-    bool connected = false;
-    std::string currentCountry = "US";
-    int default_hop = 3;
-    while (true) {
-        auto option = ui.show_menu(currentCountry, default_hop, connected);
-        switch (option) {
-            case ivpn::UI::tui::menu_option::connect:
-                if (!connected) {
-                    if (ipc.send_command("connect")) {
-                        connected = true;
-                        ui.show_message("Command sent! traffic is tunneling ");
-                    }else {
-                        ui.show_message("Error: Failed to reach IVpn Deamon. service is not running");
-
-                    }
-                }break;
-            case ivpn::UI::tui::menu_option::disconnect:
-                if (connected) {
-                    if (ipc.send_command("disconnect")) {
-                        connected = false;
-                        ui.show_message("Disconnected");
-                    }
-                }
-                break;
-            case ivpn::UI::tui::menu_option::change_city: {
-                std::cout << "\n Enter target country code e.g( US, DE, FR)";
-                std::string target_country;
-                std::cin >> target_country;
-                if(ipc.send_command("change_city", target_country)) {
-                    currentCountry = target_country;
-                    ui.show_message("command sent, requesting new exit" + target_country + "...");
-                }
-                else {
-                    ui.show_message("Error ; failed to reach deamon.");
-                }
-                break;
-            }
-            case ivpn::UI::tui::menu_option::list_cities:{
-                ui.show_message("City lists.");
-                auto locations = ipc.get_cities();
-                if (locations.empty()) {
-                    ui.show_message("No location found or deamon is not working. ");
-                }else {
-                    std::string display = "Avaliable Location:\n";
-                    for (const auto& loc: locations) {
-                        display += "-" + loc + "\n";
-                    }
-                    ui.show_message(display);
-                }
-                break;
-            }
-
-        case ivpn::UI::tui::menu_option::exit_app:
-            return 0;
+using json = nlohmann::json;
+struct ClientConfig{
+    std::string last_city = "Auto";};
+ClientConfig load_config() {
+    ClientConfig cfg;
+    std::ifstream f("client_config.json");
+    if (f.is_open()) {
+        try {
+            json j;
+            f >> j;
+            if (j.contains("last_city")) cfg.last_city = j["last_city"];
+        }catch (...) {
 
         }
     }
+    return cfg;
+}
+void save_config(const  ClientConfig& cfg) {
+    json j;
+    j["last_city"] = cfg.last_city;
+    std::ofstream f("client_config.json");
+    if (f.is_open()) f<< j.dump(4);
+}
+bool verify_connection() {
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2,2), &wsa);
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(80);
+    inet_pton(AF_INET, "1.1.1.1", &addr.sin_addr);
+    DWORD timeout = 2000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (const char*)&timeout, sizeof(timeout));
+
+    bool ok = (connect(sock, (sockaddr*)&addr, sizeof(addr)) == 0);
+    closesocket(sock);
+    WSACleanup();
+    return ok;
+}
+int main() {
+    spdlog::set_level(spdlog::level::err);
+    ipcClient ipc;
+    ivpn::UI::tui ui;
+    ClientConfig config = load_config();
+    bool connected = false;
+    auto cities = ipc.get_cities();
+    ui.set_cities(cities);
+    ui.set_current_city(config.last_city);
+    ui.on_connect =[&](){
+        if (!connected) {
+            std::thread([&]() {
+                if (ipc.send_command("connect")) {
+                    for (int i = 0; i< 20; i++) {
+                        if (verify_connection()) {
+                            connected = true;
+                            ui.set_connected(true);
+                            ui.redraw();
+                            break;
+                        }
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                    }
+                }
+            }).detach();
+        }
+    };
+    ui.on_disconnect = [&]() {
+        if (connected) {
+            ipc.send_command("disconnect");
+            connected = false;
+            ui.set_connected(false);
+            ui.redraw();
+        }
+    };
+    ui.on_change_city = [&](const std::string& city) {
+        config.last_city = city;
+        save_config(config);
+        std::thread([&, city]() {
+           ipc.send_command("change_city", city);
+            if (connected) {
+                ui.set_connected(false);
+                ui.redraw();
+
+                for (int i = 0; i<20; i++) {
+                    if (verify_connection()) {
+                        ui.set_connected(true);
+                        ui.redraw();
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+            }
+        }).detach();
+    };
+    ui.on_quit = [&]() {
+        if (connected) ipc.send_command("disconnect");
+        ui.stop();
+    };
+    ui.run();
+    return 0;
 }
