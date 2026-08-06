@@ -1,6 +1,6 @@
 #  IVpn
 
-This secure VPN application, developed in C++ for Windows, routes your system's traffic through the Tor network to ensure online anonymity.
+This is a secure VPN application, developed in C++ for Windows, routes your system's traffic through the Tor network to ensure online anonymity.
 
 I built this project to learn more about networking, Windows Services, IPC (Inter-Process Communication), and modern C++.
 
