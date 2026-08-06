@@ -10,6 +10,7 @@
 namespace ivpn::core {
     struct geoLocation {
         std::string country;
+        std::string country_code;
         std::string city;
     };
     class GeoIP {

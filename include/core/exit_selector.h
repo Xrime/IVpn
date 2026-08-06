@@ -9,6 +9,7 @@
 #include <vector>
 #include <optional>
 #include <cstdint>
+#include <map>
 
 #include "config.h"
 #include "../tor/control_port.h"
@@ -27,6 +28,7 @@ namespace ivpn::core {
         exitSelector(class GeoIP& geoip, class controlPort& tor);
         std::vector<exitNode> get_exits_for_country(const std::string& country);
         std::vector<std::string> get_available_countries();
+        std::map<std::string, std::string> get_country_codes();
     private:
         GeoIP& geoip_;
         controlPort& tor_;

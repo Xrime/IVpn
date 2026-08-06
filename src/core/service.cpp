@@ -196,6 +196,15 @@ VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode) {
     }
 }
 DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
+    // Fix working directory: Windows Services start in System32 by default.
+    // We need to set it to the folder containing our exe so relative paths work.
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(NULL, exePath, MAX_PATH)) {
+        std::string dir(exePath);
+        dir = dir.substr(0, dir.find_last_of("\\/"));
+        SetCurrentDirectoryA(dir.c_str());
+        spdlog::info("Set working directory to: {}", dir);
+    }
     spdlog::info("IVpn starting up as System");
     auto cfg =load_config("config.json");
     if (!cfg) return 1;
@@ -270,16 +279,29 @@ DWORD WINAPI ServiceWorkerThread(LPVOID lpParam) {
        spdlog::info("IPC client request avaliable country.");
         return selector.get_available_countries();
     });
-    ipc.setOnChangeCity([&](const std::string& country) {
+    // Build country name -> code map (e.g. "United States" -> "us")
+    auto country_codes = selector.get_country_codes();
+    spdlog::info("Built country code map with {} entries", country_codes.size());
+
+    ipc.setOnChangeCity([&, country_codes](const std::string& country) {
        spdlog::info("Received ChangeCity command to: {}", country);
-        std::string setconf_cmd =fmt::format("SETCONF ExitNodes={{{}}} strictNode=1",country);
+        // Look up the ISO country code for Tor
+        auto it = country_codes.find(country);
+        if (it == country_codes.end()) {
+            spdlog::error("Unknown country: {}", country);
+            return;
+        }
+        std::string code = it->second;
+        std::string setconf_cmd = fmt::format("SETCONF ExitNodes={{{}}}", code);
+        spdlog::info("Sending to Tor: {}", setconf_cmd);
         auto conf_response = tor.send(setconf_cmd);
-        if (conf_response && conf_response->find("250 0k") != std::string::npos) {
-            spdlog::info("successfully set Tor exitnode to {}", country);
+        if (conf_response && conf_response->find("250 OK") != std::string::npos) {
+            spdlog::info("Successfully set Tor exit node to {} ({})", country, code);
+            tor.send("SETCONF StrictNodes=1");
             tor.send("SIGNAL NEWNYM");
-            spdlog::info("sent NEWNYM signal old tor circuit is drop");
-        }else {
-            spdlog::error("Failed to set tor exitnode . response: {}", conf_response.value_or("Timeout"));
+            spdlog::info("Sent NEWNYM signal, old Tor circuit dropped");
+        } else {
+            spdlog::error("Failed to set Tor exit node. Response: {}", conf_response.value_or("Timeout"));
         }
     });
     ipc.start();

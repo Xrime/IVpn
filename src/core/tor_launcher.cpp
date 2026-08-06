@@ -15,15 +15,28 @@ bool torLauncher::start(uint16_t socks_port, uint16_t control_port, uint16_t dns
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
 
-    std::string cmd = fmt::format("\"{}\" --SOCKSPort {} --ControlPort {} --DNSPort {} --CookieAuthentication 1 --DataDirectory \"{}\" --Log \"notice file tor.log\"",tor_path_, socks_port, control_port, dns_port, data_dir_);
+    // Resolve the absolute path of the exe directory
+    char exePath[MAX_PATH];
+    GetModuleFileNameA(NULL, exePath, MAX_PATH);
+    std::string exeDir(exePath);
+    exeDir = exeDir.substr(0, exeDir.find_last_of("\\/"));
 
-    if (!CreateProcessA(tor_path_.c_str(), &cmd[0], nullptr, nullptr, FALSE, CREATE_NEW_PROCESS_GROUP, nullptr, nullptr, &si, &pi)) {
+    // Build absolute paths for tor binary and data directory
+    std::string abs_tor = exeDir + "\\" + tor_path_;
+    std::string abs_data = exeDir + "\\" + data_dir_;
+    std::string abs_log = exeDir + "\\tor.log";
+
+    std::string cmd = fmt::format("\"{}\" --SOCKSPort {} --ControlPort {} --DNSPort {} --CookieAuthentication 1 --DataDirectory \"{}\" --Log \"notice file {}\"", abs_tor, socks_port, control_port, dns_port, abs_data, abs_log);
+
+    spdlog::info("Launching Tor: {}", cmd);
+
+    if (!CreateProcessA(abs_tor.c_str(), &cmd[0], nullptr, nullptr, FALSE, CREATE_NEW_PROCESS_GROUP, nullptr, nullptr, &si, &pi)) {
         spdlog::error("Failed to start tor: {}", GetLastError());
         return false;
     }
     pid_ = pi.dwProcessId;
     process_handle_ = new  PROCESS_INFORMATION(pi);
-    spdlog::info("Tor starter (PID {})", pi.dwProcessId);
+    spdlog::info("Tor started (PID {})", pi.dwProcessId);
 
     return true;
 

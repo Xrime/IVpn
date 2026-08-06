@@ -51,6 +51,37 @@ std::vector<std::string> exitSelector::get_available_countries() {
     return countries;
 }
 
+std::map<std::string, std::string> exitSelector::get_country_codes() {
+    auto response = tor_.send("GETINFO ns/all");
+    if (!response) return {};
+    std::map<std::string, std::string> code_map;
+    std::istringstream stream(*response);
+    std::string line;
+    std::string current_ip;
+
+    while (std::getline(stream, line)) {
+        if (line.find("r ") == 0) {
+            std::istringstream ls(line);
+            std::vector<std::string> tokens;
+            std::string token;
+            while (ls >> token) tokens.push_back(token);
+            if (tokens.size() >= 7) {
+                current_ip = tokens[tokens.size() - 3];
+            } else {
+                current_ip = "";
+            }
+        }
+        else if (line.find("s ")== 0 && !current_ip.empty()) {
+            if (line.find("Exit") == std::string::npos) continue;
+            auto loc = geoip_.lookup(current_ip);
+            if (!loc || loc->country.empty() || loc->country_code.empty()) continue;
+            code_map[loc->country] = loc->country_code;
+            current_ip = "";
+        }
+    }
+    return code_map;
+}
+
 std::vector<exitNode> exitSelector::get_exits_for_country(const std::string &country) {
     auto response = tor_.send("GETINFO ns/all");
     if (!response) return {};

@@ -71,8 +71,19 @@ int main() {
                             ui.set_connected(true);
                             ui.redraw();
                             break;
-                        }
-                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                        }    // --- 3. Initial Boot ---
+                            // Fetch the 50+ countries instantly from the daemon
+                            std::cout << "\n\n  Waiting for IVpn Background Engine to securely Bootstrap the Tor Network...\n";
+                            std::cout << "  (This can take 30-60 seconds on a fresh install)\n";
+
+                            auto cities = ipc.get_cities();
+                            while (cities.empty()) {
+                                std::this_thread::sleep_for(std::chrono::seconds(2));
+                                cities = ipc.get_cities();
+                            }
+
+                            ui.set_cities(cities);
+                            ui.set_current_city(config.last_city);
                     }
                 }
             }).detach();

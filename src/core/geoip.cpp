@@ -4,6 +4,7 @@
 #include "../../include/core/geoip.h"
 #include <maxminddb.h>
 #include <spdlog/spdlog.h>
+#include <algorithm>
 
 namespace ivpn::core {
     GeoIP::GeoIP(const std::string &db_path) {
@@ -42,6 +43,12 @@ namespace ivpn::core {
         if (country_status == MMDB_SUCCESS && data.has_data) {
             loc.country = std::string(data.utf8_string, data.data_size);
 
+        }
+        int code_status = MMDB_get_value(&result.entry, &data, "country", "iso_code", nullptr);
+        if (code_status == MMDB_SUCCESS && data.has_data) {
+            loc.country_code = std::string(data.utf8_string, data.data_size);
+            // Tor expects lowercase country codes
+            std::transform(loc.country_code.begin(), loc.country_code.end(), loc.country_code.begin(), ::tolower);
         }
         int city_status =MMDB_get_value(&result.entry, &data, "city", "name", "en", nullptr);
         if (city_status== MMDB_SUCCESS && data.has_data) {
